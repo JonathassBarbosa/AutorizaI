@@ -76,15 +76,15 @@ export async function api(acao, dados = {}) {
 
 // ---------------------------------------------------------------- Rótulos
 export const PERFIS = {
-  master: 'Master', superintendente: 'Superintendente', regional: 'Regional',
+  master: 'Master', diretor: 'Diretoria', superintendente: 'Superintendente', regional: 'Regional',
   gerente: 'Gerente', assistente: 'Assistente de contratos', consultor: 'Consultor',
 };
-export const ALCADAS = { gerente: 'Gerente', regional: 'Regional', superintendente: 'Superintendente' };
+export const ALCADAS = { gerente: 'Gerente', regional: 'Regional', superintendente: 'Superintendente', diretor: 'Diretoria' };
 export const STATUS = {
   pendente: ['Pendente', 'ambar'], aprovada: ['Aprovada', 'verde'], negada: ['Negada', 'vermelho'], cancelada: ['Cancelada', 'cinza'],
 };
 export const DESFECHOS = { venda_finalizada: ['Venda finalizada', 'azul'], sem_venda: ['Sem venda', 'cinza'] };
-export const APROVADORES = ['gerente', 'regional', 'superintendente', 'master'];
+export const APROVADORES = ['gerente', 'regional', 'superintendente', 'diretor', 'master'];
 
 export const seloStatus = s => { const [t, c] = STATUS[s] || [s, 'cinza']; return html`<span class="selo selo-${c}">${t}</span>`; };
 export const seloDesfecho = d => { if (!d) return ''; const [t, c] = DESFECHOS[d] || [d, 'cinza']; return html`<span class="selo selo-${c}">${t}</span>`; };

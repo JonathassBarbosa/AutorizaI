@@ -5,14 +5,14 @@ try {
   // Sem internet na instalação: o push volta a funcionar na próxima atualização.
 }
 
-const CACHE = 'gav-autorizacoes-v2';
+const CACHE = 'gav-autorizacoes-v3';
 const ARQUIVOS = [
   './', 'index.html', 'config.js', 'manifest.webmanifest', 'css/app.css',
   'js/core.js', 'js/app.js', 'js/marcas.js', 'js/marcas-dados.js', 'js/push.js', 'js/monitor-client.js',
-  'js/views/login.js', 'js/views/trocar-senha.js', 'js/views/inicio.js', 'js/views/solicitacoes.js',
+  'js/views/login.js', 'js/views/cadastro.js', 'js/views/recuperar.js', 'js/views/trocar-senha.js', 'js/views/inicio.js', 'js/views/solicitacoes.js',
   'js/views/detalhe.js', 'js/views/nova.js', 'js/views/verificar.js', 'js/views/estrutura.js',
   'js/views/usuarios.js', 'js/views/tipos.js', 'js/views/monitor.js', 'js/views/perfil.js',
-  'img/icon-192.png', 'img/icon-512.png',
+  'img/icon-192.png', 'img/icon-512.png', 'apple-touch-icon.png',
 ];
 
 self.addEventListener('install', ev => {

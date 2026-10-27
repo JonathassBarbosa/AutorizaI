@@ -11,10 +11,11 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.0.0',
+  VERSAO: '1.1.0',
   MASTER_EMAIL: 'seu-email@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
-  APP_URL: 'https://SEU-USUARIO.github.io/SEU-REPOSITORIO/', // endereço do GitHub Pages (com / no final)
+  APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
+  NOME_REMETENTE: 'GAV Autorizações',    // nome que aparece nos e-mails enviados
   TZ: 'America/Sao_Paulo',
   SESSAO_HORAS: 12,          // duração do login
   LOG_MAX_LINHAS: 5000,      // linhas mantidas na aba Logs
@@ -22,14 +23,25 @@ const CONFIG = {
   LOGIN_TENTATIVAS: 5,       // tentativas erradas antes de bloquear por 15 min
 };
 
-const PERFIS = ['master', 'superintendente', 'regional', 'gerente', 'assistente', 'consultor'];
-const NIVEL = { consultor: 0, assistente: 0, gerente: 1, regional: 2, superintendente: 3, master: 9 };
-const ALCADAS = ['gerente', 'regional', 'superintendente'];
+const PERFIS = ['master', 'diretor', 'superintendente', 'regional', 'gerente', 'assistente', 'consultor'];
+const NIVEL = { consultor: 0, assistente: 0, gerente: 1, regional: 2, superintendente: 3, diretor: 4, master: 9 };
+const ALCADAS = ['gerente', 'regional', 'superintendente', 'diretor'];
 const PERFIS_DE_SALA = ['gerente', 'assistente', 'consultor'];
+const PERFIS_AUTOCADASTRO = ['consultor', 'gerente', 'assistente', 'regional', 'superintendente', 'diretor'];
 
+// Salas de vendas cadastradas automaticamente pelo setup (o master vincula cada uma à sua regional).
+const SALAS_PADRAO = [
+  'Gran Valley Hotel', 'Gunga', 'Gramado - Nasa', 'Praia do Francês', 'Gramado - Dia', 'Porto 2 Life Hotel',
+  'Gramado - Noite', 'Beach Hotel', 'Gramado - Luguito', 'Porto de Galinhas - Noite', 'Muro Alto',
+  'Porto de Galinhas - Dia', 'Pyrenéus Hotel', 'Park Hotel', 'Gramado - Casa Lugano', 'Porto Alto Hotel', 'Cupe',
+  'Jericoacoara - Lagoa', 'Jericoacoara - Vila', 'Maragogi - Noite', 'Vendas Digitais', 'Pipa - Dia', 'Pipa - Noite',
+  'Maragogi - Dia',
+];
+
+// Colunas novas entram sempre no FINAL de cada aba, para não desalinhar dados existentes.
 const ABAS = {
-  Usuarios: ['id', 'nome', 'email', 'telefone', 'perfil', 'sala_id', 'ativo', 'senha_hash', 'salt', 'trocar_senha', 'criado_em', 'ultimo_acesso'],
-  Diretorias: ['id', 'nome', 'superintendente_id', 'ativo', 'criado_em'],
+  Usuarios: ['id', 'nome', 'email', 'telefone', 'perfil', 'sala_id', 'ativo', 'senha_hash', 'salt', 'trocar_senha', 'criado_em', 'ultimo_acesso', 'cadastro'],
+  Diretorias: ['id', 'nome', 'superintendente_id', 'ativo', 'criado_em', 'diretores'],
   Regionais: ['id', 'nome', 'diretoria_id', 'gestor_id', 'ativo', 'criado_em'],
   Salas: ['id', 'nome', 'regional_id', 'limite_pct', 'ativo', 'criado_em'],
   Tipos: ['id', 'nome', 'descricao', 'alcada', 'campos', 'ativo', 'criado_em'],
@@ -57,10 +69,14 @@ const TIPOS_PADRAO = [
 // publica: não exige login | escrita: roda com trava (LockService)
 // silenciosa: não gera log de sucesso | trocaPendente: liberada mesmo com troca de senha pendente
 // ============================================================================
-const APROVADORES = ['gerente', 'regional', 'superintendente', 'master'];
+const APROVADORES = ['gerente', 'regional', 'superintendente', 'diretor', 'master'];
 const ROTAS = {
   'app.config': { publica: true, silenciosa: true, fn: configPublica_ },
   'auth.login': { publica: true, escrita: true, fn: login_ },
+  'auth.esqueciSenha': { publica: true, fn: esqueciSenha_ },
+  'auth.redefinirComCodigo': { publica: true, escrita: true, fn: redefinirComCodigo_ },
+  'cadastro.opcoes': { publica: true, silenciosa: true, fn: opcoesCadastro_ },
+  'cadastro.solicitar': { publica: true, escrita: true, fn: solicitarCadastro_ },
   'auth.logout': { escrita: true, trocaPendente: true, fn: logout_ },
   'auth.eu': { silenciosa: true, trocaPendente: true, fn: (d, u) => perfilPublico_(u) },
   'auth.trocarSenha': { escrita: true, trocaPendente: true, fn: trocarSenha_ },
@@ -84,6 +100,8 @@ const ROTAS = {
   'usuarios.listar': { perfis: ['master'], fn: listarUsuarios_ },
   'usuarios.salvar': { escrita: true, perfis: ['master'], fn: salvarUsuario_ },
   'usuarios.redefinirSenha': { escrita: true, perfis: ['master'], fn: redefinirSenha_ },
+  'usuarios.aprovarCadastro': { escrita: true, perfis: ['master'], fn: aprovarCadastro_ },
+  'usuarios.recusarCadastro': { escrita: true, perfis: ['master'], fn: recusarCadastro_ },
 
   'tipos.listar': { fn: listarTipos_ },
   'tipos.salvar': { escrita: true, perfis: ['master'], fn: salvarTipo_ },
@@ -353,10 +371,13 @@ function login_(d) {
     throw falha_('Muitas tentativas erradas. Aguarde 15 minutos e tente novamente.', 'BLOQUEADO');
   }
   const u = ler_('Usuarios').find(x => x.email.toLowerCase() === email);
-  if (!u || !bool_(u.ativo) || hashSenha_(String(d.senha || ''), u.salt) !== u.senha_hash) {
+  if (!u || hashSenha_(String(d.senha || ''), u.salt) !== u.senha_hash) {
     cache.put(chave, String(tentativas + 1), 900);
     throw falha_('E-mail ou senha incorretos.', 'LOGIN');
   }
+  if (u.cadastro === 'pendente') throw falha_('Seu cadastro está aguardando a aprovação do master. Você receberá um e-mail quando for liberado.', 'CADASTRO_PENDENTE');
+  if (u.cadastro === 'recusado') throw falha_('Seu cadastro não foi aprovado. Fale com o administrador do sistema.', 'CADASTRO_RECUSADO');
+  if (!bool_(u.ativo)) throw falha_('Seu acesso está desativado. Fale com o administrador do sistema.', 'LOGIN');
   cache.remove(chave);
   const token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
   const tokenHash = sha_(token);
@@ -442,6 +463,8 @@ function salasDoUsuario_(u) {
   let ids;
   if (u.perfil === 'master') {
     ids = Object.keys(e.sala);
+  } else if (u.perfil === 'diretor') {
+    ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.dir && listaIds_(c.dir.diretores).indexOf(u.id) >= 0; });
   } else if (u.perfil === 'superintendente') {
     ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.dir && c.dir.superintendente_id === u.id; });
   } else if (u.perfil === 'regional') {
@@ -475,12 +498,15 @@ function aprovadoresDoNivel_(salaId, nivel) {
   if (nivel === 'gerente') return ativos.filter(u => u.perfil === 'gerente' && u.sala_id === salaId);
   if (nivel === 'regional') return c.reg && c.reg.gestor_id ? ativos.filter(u => u.id === c.reg.gestor_id) : [];
   if (nivel === 'superintendente') return c.dir && c.dir.superintendente_id ? ativos.filter(u => u.id === c.dir.superintendente_id) : [];
+  if (nivel === 'diretor') return c.dir ? ativos.filter(u => u.perfil === 'diretor' && listaIds_(c.dir.diretores).indexOf(u.id) >= 0) : [];
   return ativos.filter(u => u.perfil === 'master');
 }
 
+function listaIds_(txt) { return String(txt || '').split(',').map(s => s.trim()).filter(Boolean); }
+
 /** Quem deve ser avisado: o nível da alçada; se estiver vago, sobe até achar alguém. */
 function destinatariosDaAlcada_(salaId, alcada) {
-  const ordem = ['gerente', 'regional', 'superintendente', 'master'];
+  const ordem = ['gerente', 'regional', 'superintendente', 'diretor', 'master'];
   for (let i = Math.max(0, ordem.indexOf(alcada)); i < ordem.length; i++) {
     const lista = aprovadoresDoNivel_(salaId, ordem[i]);
     if (lista.length) return lista;
@@ -493,7 +519,7 @@ function calcularAlcada_(tipo, salaId) {
   let motivo = 'Definida pelo tipo de exceção';
   const sala = estrutura_().sala[salaId];
   const limite = Number(sala && sala.limite_pct || 0);
-  if (limite > 0 && alcada !== 'superintendente') {
+  if (limite > 0 && alcada !== ALCADAS[ALCADAS.length - 1]) {
     const ind = indicadorSala_(salaId, mesAtual_());
     if (ind.vendas > 0 && ind.pct >= limite) {
       alcada = ALCADAS[ALCADAS.indexOf(alcada) + 1];
@@ -514,6 +540,11 @@ function indicadorSala_(salaId, mes) {
 function vinculoTexto_(u) {
   const e = estrutura_();
   if (u.perfil === 'master') return 'Acesso total';
+  if (u.cadastro === 'pendente') return 'Aguardando aprovação';
+  if (u.perfil === 'diretor') {
+    const l = Object.keys(e.dir).map(k => e.dir[k]).filter(d => listaIds_(d.diretores).indexOf(u.id) >= 0).map(d => d.nome);
+    return l.length ? 'Diretoria: ' + l.join(', ') : 'Sem diretoria vinculada';
+  }
   if (u.perfil === 'superintendente') {
     const l = Object.keys(e.dir).map(k => e.dir[k]).filter(d => d.superintendente_id === u.id).map(d => d.nome);
     return l.length ? 'Diretoria: ' + l.join(', ') : 'Sem diretoria vinculada';
@@ -531,7 +562,7 @@ function perfilPublico_(u) {
   return {
     id: u.id, nome: u.nome, email: u.email, telefone: u.telefone, perfil: u.perfil,
     sala_id: u.sala_id, sala_nome: c.sala ? c.sala.nome : '', vinculo: vinculoTexto_(u),
-    trocar_senha: bool_(u.trocar_senha), ativo: bool_(u.ativo),
+    trocar_senha: bool_(u.trocar_senha), ativo: bool_(u.ativo), cadastro: u.cadastro || 'aprovado',
     criado_em: u.criado_em, ultimo_acesso: u.ultimo_acesso,
   };
 }
@@ -642,10 +673,11 @@ function responderSolicitacao_(d, u) {
   const link = '#/solicitacao/' + s.id;
   notificar_([s.consultor_id], decisao === 'aprovada' ? 'Exceção aprovada ✅' : 'Exceção negada ❌',
     s.codigo + ' — ' + s.cliente + (decisao === 'negada' ? ' · revise a negociação' : ''), link);
-  if (decisao === 'aprovada') {
-    const assistentes = ler_('Usuarios').filter(x => x.perfil === 'assistente' && x.sala_id === s.sala_id && bool_(x.ativo));
-    notificar_(assistentes.map(x => x.id), 'Autorização liberada', s.codigo + ' — ' + s.cliente + ' pode seguir para contrato', link);
-  }
+  // O assistente de contratos não solicita: ele recebe o retorno de toda decisão da sala.
+  const assistentes = ler_('Usuarios').filter(x => x.perfil === 'assistente' && x.sala_id === s.sala_id && bool_(x.ativo));
+  notificar_(assistentes.map(x => x.id),
+    decisao === 'aprovada' ? 'Autorização liberada ✅' : 'Exceção negada ❌',
+    s.codigo + ' — ' + s.cliente + (decisao === 'aprovada' ? ' pode seguir para contrato' : ' · venda só dentro da regra'), link);
   return solicitacaoPublica_(novo, u);
 }
 
@@ -795,13 +827,15 @@ function obterEstrutura_(d, u) {
   return {
     diretorias: Object.keys(e.dir).map(k => e.dir[k]).map(x => ({
       id: x.id, nome: x.nome, superintendente_id: x.superintendente_id, superintendente_nome: nome(x.superintendente_id), ativo: bool_(x.ativo),
+      diretores: listaIds_(x.diretores).map(nome).filter(Boolean),
     })).sort((a, b) => a.nome.localeCompare(b.nome)),
     regionais: Object.keys(e.reg).map(k => e.reg[k]).map(x => ({
       id: x.id, nome: x.nome, diretoria_id: x.diretoria_id, diretoria_nome: (e.dir[x.diretoria_id] || {}).nome || '',
       gestor_id: x.gestor_id, gestor_nome: nome(x.gestor_id), ativo: bool_(x.ativo),
     })).sort((a, b) => a.nome.localeCompare(b.nome)),
     salas: salasOut,
-    usuarios: usuarios.map(p => ({ id: p.id, nome: p.nome, perfil: p.perfil, ativo: bool_(p.ativo) })),
+    usuarios: usuarios.filter(p => p.cadastro !== 'pendente' && p.cadastro !== 'recusado')
+      .map(p => ({ id: p.id, nome: p.nome, perfil: p.perfil, ativo: bool_(p.ativo) })),
   };
 }
 
@@ -849,6 +883,7 @@ function salvarSala_(d, u) {
 // USUÁRIOS
 // ============================================================================
 function vinculosDe_(u) {
+  if (u.perfil === 'diretor') return ler_('Diretorias').filter(x => listaIds_(x.diretores).indexOf(u.id) >= 0).map(x => x.id);
   if (u.perfil === 'superintendente') return ler_('Diretorias').filter(x => x.superintendente_id === u.id).map(x => x.id);
   if (u.perfil === 'regional') return ler_('Regionais').filter(x => x.gestor_id === u.id).map(x => x.id);
   return [];
@@ -888,7 +923,7 @@ function salvarUsuario_(d, u) {
     const salt = Utilities.getUuid();
     registro = inserir_('Usuarios', Object.assign({
       id: novoId_('U'), senha_hash: hashSenha_(senhaTemp, salt), salt: salt, trocar_senha: 'true',
-      criado_em: agora_(), ultimo_acesso: '',
+      criado_em: agora_(), ultimo_acesso: '', cadastro: 'aprovado',
     }, dados));
   }
   aplicarVinculos_(registro, Array.isArray(d.vinculo_ids) ? d.vinculo_ids : null);
@@ -900,10 +935,18 @@ function salvarUsuario_(d, u) {
 function aplicarVinculos_(reg, ids) {
   const ehSup = reg.perfil === 'superintendente';
   const ehReg = reg.perfil === 'regional';
+  const ehDir = reg.perfil === 'diretor';
   ler_('Diretorias').forEach(x => {
+    const alt = {};
     const deve = ehSup && (ids ? ids.indexOf(x.id) >= 0 : x.superintendente_id === reg.id);
-    if (deve && x.superintendente_id !== reg.id) atualizar_('Diretorias', x, { superintendente_id: reg.id });
-    if (!deve && x.superintendente_id === reg.id) atualizar_('Diretorias', x, { superintendente_id: '' });
+    if (deve && x.superintendente_id !== reg.id) alt.superintendente_id = reg.id;
+    if (!deve && x.superintendente_id === reg.id) alt.superintendente_id = '';
+    const diretores = listaIds_(x.diretores);
+    const tem = diretores.indexOf(reg.id) >= 0;
+    const deveDir = ehDir && (ids ? ids.indexOf(x.id) >= 0 : tem);
+    if (deveDir && !tem) alt.diretores = diretores.concat(reg.id).join(',');
+    if (!deveDir && tem) alt.diretores = diretores.filter(i => i !== reg.id).join(',');
+    if (Object.keys(alt).length) atualizar_('Diretorias', x, alt);
   });
   ler_('Regionais').forEach(x => {
     const deve = ehReg && (ids ? ids.indexOf(x.id) >= 0 : x.gestor_id === reg.id);
@@ -921,6 +964,181 @@ function redefinirSenha_(d, u) {
   encerrarSessoes_(alvo.id);
   auditar_(u, 'redefiniu senha', 'usuario', alvo.id, alvo.nome);
   return { senha_temporaria: senha };
+}
+
+// ============================================================================
+// AUTOCADASTRO (o usuário se cadastra e o master aprova)
+// ============================================================================
+function opcoesCadastro_() {
+  return {
+    perfis: PERFIS_AUTOCADASTRO,
+    salas: ler_('Salas').filter(s => bool_(s.ativo)).map(s => ({ id: s.id, nome: s.nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome)),
+  };
+}
+
+function solicitarCadastro_(d) {
+  const cache = CacheService.getScriptCache();
+  const chave = 'cad_' + Math.floor(Date.now() / 3600000);
+  const n = Number(cache.get(chave) || 0);
+  if (n >= 30) throw falha_('Muitos cadastros em pouco tempo. Tente novamente mais tarde.', 'LIMITE');
+  const nome = texto_(d.nome, 'Nome completo', 5, 120);
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw falha_('E-mail inválido.');
+  const perfil = String(d.perfil || '');
+  if (PERFIS_AUTOCADASTRO.indexOf(perfil) < 0) throw falha_('Selecione a função que você ocupa.');
+  const existente = ler_('Usuarios').find(x => x.email.toLowerCase() === email);
+  if (existente) {
+    throw falha_(existente.cadastro === 'pendente'
+      ? 'Já existe um cadastro com este e-mail aguardando aprovação.'
+      : 'Este e-mail já está cadastrado. Use "Esqueci minha senha" se não lembrar a senha.');
+  }
+  let salaId = '';
+  if (PERFIS_DE_SALA.indexOf(perfil) >= 0) {
+    const sala = estrutura_().sala[d.sala_id];
+    if (!sala || !bool_(sala.ativo)) throw falha_('Selecione a sua sala de vendas.');
+    salaId = sala.id;
+  }
+  const senha = validarNovaSenha_(d.senha);
+  const salt = Utilities.getUuid();
+  const reg = inserir_('Usuarios', {
+    id: novoId_('U'), nome: nome, email: email, telefone: String(d.telefone || '').trim().slice(0, 30), perfil: perfil,
+    sala_id: salaId, ativo: 'false', senha_hash: hashSenha_(senha, salt), salt: salt, trocar_senha: 'false',
+    criado_em: agora_(), ultimo_acesso: '', cadastro: 'pendente',
+  });
+  cache.put(chave, String(n + 1), 3700);
+  auditar_({ id: reg.id, nome: nome }, 'solicitou cadastro', 'usuario', reg.id, perfil + (salaId ? ' — ' + estrutura_().sala[salaId].nome : ''));
+  const masters = ler_('Usuarios').filter(x => x.perfil === 'master' && bool_(x.ativo));
+  notificar_(masters.map(x => x.id), 'Novo cadastro para aprovar', nome + ' — ' + rotuloPerfil_(perfil), '#/usuarios');
+  masters.forEach(m => enviarEmail_(m.email, 'Novo cadastro aguardando aprovação', 'Novo cadastro para aprovar',
+    '<p><strong>' + esc_(nome) + '</strong> (' + esc_(email) + ') pediu acesso como <strong>' + rotuloPerfil_(perfil) + '</strong>' +
+    (salaId ? ' na sala <strong>' + esc_(estrutura_().sala[salaId].nome) + '</strong>' : '') + '.</p>',
+    'Revisar cadastro', CONFIG.APP_URL + '#/usuarios'));
+  return { enviado: true };
+}
+
+function aprovarCadastro_(d, u) {
+  const alvo = buscar_('Usuarios', d.id);
+  if (!alvo || alvo.cadastro !== 'pendente') throw falha_('Cadastro não encontrado ou já analisado.');
+  const perfil = PERFIS_AUTOCADASTRO.indexOf(d.perfil) >= 0 ? d.perfil : alvo.perfil;
+  let salaId = '';
+  if (PERFIS_DE_SALA.indexOf(perfil) >= 0) {
+    salaId = d.sala_id || alvo.sala_id;
+    if (!estrutura_().sala[salaId]) throw falha_('Selecione a sala de vendas deste usuário.');
+  }
+  const ids = Array.isArray(d.vinculo_ids) ? d.vinculo_ids : [];
+  if (['regional', 'superintendente', 'diretor'].indexOf(perfil) >= 0 && !ids.length) {
+    throw falha_('Marque pelo menos uma ' + (perfil === 'regional' ? 'regional' : 'diretoria') + ' sob responsabilidade deste usuário.');
+  }
+  const reg = atualizar_('Usuarios', alvo, { perfil: perfil, sala_id: salaId, ativo: 'true', cadastro: 'aprovado' });
+  aplicarVinculos_(reg, ids);
+  auditar_(u, 'aprovou cadastro', 'usuario', alvo.id, alvo.nome + ' — ' + perfil);
+  enviarEmail_(alvo.email, 'Seu acesso foi liberado', 'Cadastro aprovado ✅',
+    '<p>Olá, <strong>' + esc_(alvo.nome.split(' ')[0]) + '</strong>! Seu acesso ao sistema de autorizações da GAV foi aprovado como <strong>' +
+    rotuloPerfil_(perfil) + '</strong>.</p><p>Entre com o e-mail e a senha que você cadastrou.</p>', 'Acessar o sistema', CONFIG.APP_URL);
+  return { usuario: Object.assign(perfilPublico_(reg), { vinculo_ids: vinculosDe_(reg) }) };
+}
+
+function recusarCadastro_(d, u) {
+  const alvo = buscar_('Usuarios', d.id);
+  if (!alvo || alvo.cadastro !== 'pendente') throw falha_('Cadastro não encontrado ou já analisado.');
+  atualizar_('Usuarios', alvo, { ativo: 'false', cadastro: 'recusado' });
+  auditar_(u, 'recusou cadastro', 'usuario', alvo.id, alvo.nome + (d.motivo ? ' — ' + String(d.motivo).slice(0, 300) : ''));
+  enviarEmail_(alvo.email, 'Cadastro não aprovado', 'Cadastro não aprovado',
+    '<p>Olá, ' + esc_(alvo.nome.split(' ')[0]) + '. Seu pedido de acesso não foi aprovado.</p>' +
+    (d.motivo ? '<p><strong>Motivo:</strong> ' + esc_(String(d.motivo).slice(0, 300)) + '</p>' : '') +
+    '<p>Em caso de dúvida, fale com o administrador do sistema.</p>', '', '');
+  return { recusado: true };
+}
+
+function rotuloPerfil_(p) {
+  return { master: 'Master', diretor: 'Diretoria', superintendente: 'Superintendente', regional: 'Regional', gerente: 'Gerente',
+    assistente: 'Assistente de contratos', consultor: 'Consultor' }[p] || p;
+}
+
+// ============================================================================
+// RECUPERAÇÃO DE SENHA POR E-MAIL (código de 6 dígitos, válido por 15 minutos)
+// ============================================================================
+function esqueciSenha_(d) {
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw falha_('Informe um e-mail válido.');
+  const resposta = { enviado: true, mensagem: 'Se o e-mail estiver cadastrado, você vai receber um código em instantes. Confira também a caixa de spam.' };
+  const cache = CacheService.getScriptCache();
+  const chaveEnvios = 'rse_' + sha_(email).slice(0, 24);
+  const envios = Number(cache.get(chaveEnvios) || 0);
+  if (envios >= 3) throw falha_('Já enviamos 3 códigos na última hora. Aguarde um pouco e confira a caixa de spam.', 'LIMITE');
+  const u = ler_('Usuarios').find(x => x.email.toLowerCase() === email && x.cadastro !== 'pendente' && x.cadastro !== 'recusado' && bool_(x.ativo));
+  if (!u) return resposta; // não revela se o e-mail existe
+  const codigo = String(Math.floor(100000 + Math.random() * 900000));
+  cache.put('rs_' + sha_(email).slice(0, 24), JSON.stringify({ h: sha_(codigo + email), t: 0 }), 900);
+  cache.put(chaveEnvios, String(envios + 1), 3600);
+  const ok = enviarEmail_(u.email, 'Código para redefinir sua senha: ' + codigo, 'Redefinição de senha',
+    '<p>Olá, ' + esc_(u.nome.split(' ')[0]) + '. Use o código abaixo para criar uma nova senha:</p>' +
+    '<p style="font-size:32px;letter-spacing:8px;font-weight:700;color:#0B306B;margin:18px 0">' + codigo + '</p>' +
+    '<p style="color:#5F6B80">O código vale por 15 minutos. Se não foi você que pediu, ignore este e-mail.</p>', '', '');
+  if (!ok) throw falha_('Não foi possível enviar o e-mail agora. Tente novamente em alguns minutos.', 'EMAIL');
+  log_('INFO', 'backend', 'auth.esqueciSenha', u.nome + ' (' + u.perfil + ')', 'Código de recuperação enviado', '', '', '');
+  return resposta;
+}
+
+function redefinirComCodigo_(d) {
+  const email = String(d.email || '').trim().toLowerCase();
+  const cache = CacheService.getScriptCache();
+  const chave = 'rs_' + sha_(email).slice(0, 24);
+  const reg = json_(cache.get(chave), null);
+  if (!reg) throw falha_('Código expirado ou inexistente. Peça um novo código.', 'CODIGO');
+  if (reg.t >= 5) { cache.remove(chave); throw falha_('Muitas tentativas. Peça um novo código.', 'CODIGO'); }
+  if (sha_(String(d.codigo || '').trim() + email) !== reg.h) {
+    reg.t++;
+    cache.put(chave, JSON.stringify(reg), 900);
+    throw falha_('Código incorreto. Confira o e-mail e tente de novo.', 'CODIGO');
+  }
+  const nova = validarNovaSenha_(d.nova_senha);
+  const u = ler_('Usuarios').find(x => x.email.toLowerCase() === email);
+  if (!u) throw falha_('Usuário não encontrado.');
+  const salt = Utilities.getUuid();
+  atualizar_('Usuarios', u, { senha_hash: hashSenha_(nova, salt), salt: salt, trocar_senha: 'false' });
+  encerrarSessoes_(u.id);
+  cache.remove(chave);
+  cache.remove('tent_' + sha_(email).slice(0, 24));
+  auditar_(u, 'redefiniu a senha por e-mail', 'usuario', u.id, '');
+  return { redefinida: true };
+}
+
+// ============================================================================
+// E-MAIL (MailApp: ~100 e-mails/dia numa conta Gmail)
+// ============================================================================
+function esc_(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function enviarEmail_(para, assunto, titulo, corpoHtml, textoBotao, linkBotao) {
+  try {
+    const botao = textoBotao && linkBotao
+      ? '<p style="margin:26px 0 8px"><a href="' + linkBotao + '" style="background:#0B306B;color:#FEF9E0;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700">' + textoBotao + '</a></p>'
+      : '';
+    const html = '<div style="background:#F7F3E6;padding:28px 12px;font-family:Arial,Helvetica,sans-serif">' +
+      '<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #E8E1CC">' +
+      '<div style="background:#0B306B;color:#FEF9E0;padding:20px 26px;font-family:Georgia,serif;font-size:26px;letter-spacing:1px">GAV' +
+      '<div style="font-family:Arial,sans-serif;font-size:10px;letter-spacing:4px;margin-top:4px">HOTÉIS E RESORTS</div></div>' +
+      '<div style="padding:26px;color:#0E2447;font-size:15px;line-height:1.55"><h2 style="font-family:Georgia,serif;color:#0B306B;margin:0 0 12px">' +
+      titulo + '</h2>' + corpoHtml + botao + '</div>' +
+      '<div style="padding:14px 26px;background:#FCFAF2;color:#98A0AE;font-size:12px">Mensagem automática do sistema de autorizações GAV.</div></div></div>';
+    MailApp.sendEmail({ to: para, subject: assunto, htmlBody: html, name: CONFIG.NOME_REMETENTE });
+    return true;
+  } catch (e) {
+    log_('ERROR', 'backend', 'email', '-', 'Falha ao enviar e-mail para ' + para + ': ' + e.message, localDoErro_(e),
+      'Se o erro for de permissão, rode a função setup() no editor para autorizar o envio de e-mails.', '');
+    return false;
+  }
+}
+
+/** Rode no editor para testar o envio de e-mails (e autorizar a permissão de e-mail). */
+function testarEmail() {
+  MEMO_ = {};
+  const destino = Session.getEffectiveUser().getEmail() || CONFIG.MASTER_EMAIL;
+  const ok = enviarEmail_(destino, 'Teste de e-mail — GAV Autorizações', 'Tudo certo!', '<p>O envio de e-mails do sistema está funcionando.</p>', '', '');
+  Logger.log(ok ? '✅ E-mail de teste enviado para ' + destino : '❌ Falhou — veja a aba Logs.');
 }
 
 // ============================================================================
@@ -995,6 +1213,7 @@ function listarNotificacoes_(d, u) {
   return {
     nao_lidas: minhas.filter(n => !bool_(n.lida)).length,
     para_aprovar: APROVADORES.indexOf(u.perfil) >= 0 ? ler_('Solicitacoes').filter(s => podeAprovar_(u, s)).length : 0,
+    cadastros_pendentes: u.perfil === 'master' ? ler_('Usuarios').filter(x => x.cadastro === 'pendente').length : 0,
     itens: minhas.slice(0, 30).map(n => ({ id: n.id, titulo: n.titulo, mensagem: n.mensagem, link: n.link, lida: bool_(n.lida), criado_em: n.criado_em })),
   };
 }
@@ -1174,7 +1393,9 @@ function setup() {
     }));
   }
 
-  let mensagem = '';
+  const novasSalas = importarSalasPadrao_();
+
+  let mensagem = novasSalas ? novasSalas + ' sala(s) de vendas cadastrada(s). ' : '';
   if (!ler_('Usuarios').some(u => u.perfil === 'master')) {
     if (/seu-email/.test(CONFIG.MASTER_EMAIL)) throw new Error('Troque CONFIG.MASTER_EMAIL pelo seu e-mail antes de rodar setup().');
     const senha = senhaTemporaria_();
@@ -1182,10 +1403,11 @@ function setup() {
     inserir_('Usuarios', {
       id: novoId_('U'), nome: CONFIG.MASTER_NOME, email: CONFIG.MASTER_EMAIL.toLowerCase(), telefone: '', perfil: 'master',
       sala_id: '', ativo: 'true', senha_hash: hashSenha_(senha, salt), salt: salt, trocar_senha: 'true', criado_em: agora_(), ultimo_acesso: '',
+      cadastro: 'aprovado',
     });
-    mensagem = 'USUÁRIO MASTER CRIADO → e-mail: ' + CONFIG.MASTER_EMAIL + ' | senha provisória: ' + senha;
+    mensagem += 'USUÁRIO MASTER CRIADO → e-mail: ' + CONFIG.MASTER_EMAIL + ' | senha provisória: ' + senha;
   } else {
-    mensagem = 'O usuário master já existia (nenhuma senha alterada).';
+    mensagem += 'O usuário master já existia (nenhuma senha alterada).';
   }
 
   ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'manutencao') ScriptApp.deleteTrigger(t); });
@@ -1194,6 +1416,18 @@ function setup() {
   log_('INFO', 'backend', 'setup', 'editor', 'Instalação/atualização executada', '', '', '');
   Logger.log('✅ Setup concluído. ' + mensagem);
   return mensagem;
+}
+
+/** Cadastra as salas de SALAS_PADRAO que ainda não existem (compara o nome sem acentos). */
+function importarSalasPadrao_() {
+  const existentes = ler_('Salas').map(s => normalizar_(s.nome));
+  let n = 0;
+  SALAS_PADRAO.forEach(nome => {
+    if (existentes.indexOf(normalizar_(nome)) >= 0) return;
+    inserir_('Salas', { id: novoId_('L'), nome: nome, regional_id: '', limite_pct: 0, ativo: 'true', criado_em: agora_() });
+    n++;
+  });
+  return n;
 }
 
 /** Gera uma nova senha provisória para o master (use se esquecer a senha). */

@@ -32,15 +32,17 @@ async function chamar(action, data, token) {
   const rPe = await chamar('estrutura.salvarRegional', { nome: 'Regional Nordeste', diretoria_id: dir.id, gestor_id: regPe.id, ativo: true }, tm);
   const rRs = await chamar('estrutura.salvarRegional', { nome: 'Regional Sul', diretoria_id: dir.id, gestor_id: regRs.id, ativo: true }, tm);
   const salas = {};
-  for (const [nome, reg, lim] of [['Porto de Galinhas - Dia', rPe, 10], ['Muro Alto', rPe, 12.5], ['Maragogi Beach', rPe, 8], ['Gramado Matriz - Dia', rRs, 15], ['Gramado Rua Coberta - Noite', rRs, 10]]) {
-    salas[nome] = await chamar('estrutura.salvarSala', { nome, regional_id: reg.id, limite_pct: lim, ativo: true }, tm);
+  const existentes = (await chamar('cadastro.opcoes', {})).salas;
+  for (const [nome, reg, lim] of [['Porto de Galinhas - Dia', rPe, 10], ['Muro Alto', rPe, 12.5], ['Maragogi - Dia', rPe, 8], ['Gramado - Dia', rRs, 15], ['Gramado - Noite', rRs, 10]]) {
+    const id = existentes.find(s => s.nome === nome)?.id;
+    salas[nome] = await chamar('estrutura.salvarSala', { id, nome, regional_id: reg.id, limite_pct: lim, ativo: true }, tm);
   }
   await usuario('Gabriela Souza', 'gerente@gav.dev', 'gerente', { sala_id: salas['Porto de Galinhas - Dia'].id });
-  await usuario('Paulo Mendes', 'gerente.gramado@gav.dev', 'gerente', { sala_id: salas['Gramado Matriz - Dia'].id });
+  await usuario('Paulo Mendes', 'gerente.gramado@gav.dev', 'gerente', { sala_id: salas['Gramado - Dia'].id });
   await usuario('Ana Costa', 'assistente@gav.dev', 'assistente', { sala_id: salas['Porto de Galinhas - Dia'].id });
   await usuario('Carlos Mendes', 'consultor@gav.dev', 'consultor', { sala_id: salas['Porto de Galinhas - Dia'].id });
   await usuario('Yasmin Oliveira', 'yasmin@gav.dev', 'consultor', { sala_id: salas['Porto de Galinhas - Dia'].id });
-  await usuario('Lucas Mira', 'lucas@gav.dev', 'consultor', { sala_id: salas['Gramado Matriz - Dia'].id });
+  await usuario('Lucas Mira', 'lucas@gav.dev', 'consultor', { sala_id: salas['Gramado - Dia'].id });
   await usuario('Ricardo Gomes', 'ricardo@gav.dev', 'consultor', { sala_id: salas['Muro Alto'].id });
 
   const tipos = await chamar('tipos.listar', {}, tm);
@@ -48,7 +50,7 @@ async function chamar(action, data, token) {
   const campos = (t, v) => Object.fromEntries(t.campos.map((c, i) => [c, v[i] || 'Conforme negociação']));
   const mes = (await chamar('dashboard.obter', {}, tm)).mes;
   await chamar('vendas.salvar', { sala_id: salas['Porto de Galinhas - Dia'].id, mes, total_vendas: 42 }, tm);
-  await chamar('vendas.salvar', { sala_id: salas['Gramado Matriz - Dia'].id, mes, total_vendas: 55 }, tm);
+  await chamar('vendas.salvar', { sala_id: salas['Gramado - Dia'].id, mes, total_vendas: 55 }, tm);
   await chamar('vendas.salvar', { sala_id: salas['Muro Alto'].id, mes, total_vendas: 18 }, tm);
 
   const cpfs = ['529.982.247-25', '153.509.460-56', '862.883.667-57', '111.444.777-35', '390.533.447-05', '714.602.380-01'];

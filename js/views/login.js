@@ -18,7 +18,7 @@ export default {
           <form id="form-login" novalidate>
             <div class="auth-logo-mobile">${assinatura({ classe: 'grande' })}</div>
             <h1>Entrar</h1>
-            <p>Use o e-mail e a senha cadastrados pelo administrador.</p>
+            <p>Use seu e-mail e senha de acesso.</p>
             <div id="erro-login"></div>
             <div class="campo">
               <label for="email">E-mail</label>
@@ -29,7 +29,9 @@ export default {
               <input class="entrada" id="senha" name="senha" type="password" autocomplete="current-password" required>
             </div>
             <button class="btn btn-primario btn-bloco" type="submit">Entrar</button>
-            <p style="margin:18px 0 0;font-size:13px;color:var(--muted);text-align:center">Esqueceu a senha? Peça ao administrador para redefinir.</p>
+            <p style="margin:14px 0 0;text-align:center"><a href="#/recuperar" style="font-size:14px">Esqueci minha senha</a></p>
+            <div class="divisor"><span>Ainda não tem acesso?</span></div>
+            <a class="btn btn-claro btn-bloco" href="#/cadastro">Criar conta</a>
           </form>
         </section>
       </div>`;

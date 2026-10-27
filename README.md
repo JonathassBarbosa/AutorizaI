@@ -20,11 +20,16 @@ gav-autorizacoes-app/
 | Perfil | O que faz |
 |---|---|
 | **Master** | Acesso total. Cadastra diretorias, regionais, salas, usuários e tipos de exceção. Vê o **Monitor**. |
+| **Diretoria** | Responde pela(s) diretoria(s) que o master apontar. Acompanha e aprova exceções de todas as salas delas. |
 | **Superintendente** | Responde pela(s) diretoria(s). Aprova exceções de todas as salas dela. |
 | **Regional** | Responde pela(s) regional(is). Aprova exceções das salas dela. |
 | **Gerente** | Vinculado a uma sala. Aprova as exceções da sala na alçada de gerente. |
-| **Assistente de contratos** | Vinculado a uma sala. **Confere a autorização pelo código** antes de finalizar o contrato e registra o desfecho (venda finalizada ou sem venda, com justificativa). |
+| **Assistente de contratos** | Vinculado a uma sala. **Não pede autorização**: recebe o retorno de toda decisão (aprovada ou negada) da sala, confere a autorização pelo código antes de finalizar o contrato e registra o desfecho (venda finalizada ou sem venda, com justificativa). |
 | **Consultor** | Vinculado a uma sala. Cria as solicitações e acompanha as respostas. |
+
+**Cadastro:** cada pessoa cria a própria conta em **Criar conta**, escolhendo a função. Consultores, gerentes e assistentes escolhem a sala na lista. O master aprova em **Usuários** e, para Regional, Superintendente e Diretoria, marca quais regionais ou diretorias ficam sob responsabilidade de cada um. A pessoa recebe um e-mail quando é aprovada.
+
+**Senha esquecida:** em **Esqueci minha senha**, a pessoa recebe por e-mail um código de 6 dígitos, válido por 15 minutos.
 
 **Alçadas:** cada tipo de exceção define o nível mínimo (gerente, regional ou superintendente). Níveis acima também podem aprovar. Se o cargo estiver vago na sala, o pedido sobe automaticamente. Se a sala passar do **limite % de exceções do mês**, as novas exceções sobem um nível.
 
@@ -99,6 +104,14 @@ Sem o OneSignal, os avisos aparecem só no sino dentro do app. Com ele, chegam c
    - **Android:** no Chrome, menu **⋮ → Instalar app**.
 
 ---
+
+## Atualizando para a versão 1.1 (autocadastro e e-mail)
+
+1. Cole o novo `apps-script/Code.gs` no Apps Script (mantenha o seu e-mail em `MASTER_EMAIL`) e salve.
+2. Rode a função **`setup`** de novo. Isso **não apaga nada**: cria as colunas novas, cadastra as 24 salas de vendas e pede a autorização nova para **enviar e-mails** (aceite como da primeira vez).
+3. Para conferir o e-mail, rode **`testarEmail`**: chega uma mensagem de teste na sua caixa.
+4. **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar.**
+5. Em **Estrutura**, vincule cada sala à sua regional (as salas novas aparecem em "Salas sem regional").
 
 ## Monitor (perfil master)
 

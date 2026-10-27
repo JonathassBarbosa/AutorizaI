@@ -52,7 +52,8 @@ export default {
 
       ${est.diretorias.map(d => html`<div class="card org-dir">
         <div class="card-topo"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-          <h3 style="font-size:17px">${d.nome}${d.ativo ? '' : ' (inativa)'}</h3>${pessoa(d.superintendente_nome, 'Superintendente')}</div>
+          <h3 style="font-size:17px">${d.nome}${d.ativo ? '' : ' (inativa)'}</h3>${pessoa(d.superintendente_nome, 'Superintendente')}
+          ${d.diretores.map(n => pessoa(n, 'Diretoria'))}</div>
           <button class="editar-link" data-editar="diretoria" data-id="${d.id}" title="Editar diretoria">${icone('editar')}</button></div>
         <div class="org-regionais">${est.regionais.filter(r => r.diretoria_id === d.id).map(blocoRegional)}
           ${!est.regionais.some(r => r.diretoria_id === d.id) ? html`<span class="secundario">Nenhuma regional nesta diretoria.</span>` : ''}</div>

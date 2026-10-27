@@ -53,8 +53,9 @@ const sup = novoUsuario('Sofia Superintendente', 'sup@gav.dev', 'superintendente
 const reg = novoUsuario('Rafael Regional', 'reg@gav.dev', 'regional');
 const dir = ok('estrutura.salvarDiretoria', { nome: 'Diretoria Nordeste', superintendente_id: sup.id, ativo: true }, tm);
 const rgl = ok('estrutura.salvarRegional', { nome: 'Regional Pernambuco', diretoria_id: dir.id, gestor_id: reg.id, ativo: true }, tm);
-const sala = ok('estrutura.salvarSala', { nome: 'Porto de Galinhas - Dia', regional_id: rgl.id, limite_pct: 10, ativo: true }, tm);
-const sala2 = ok('estrutura.salvarSala', { nome: 'Muro Alto', regional_id: rgl.id, limite_pct: 0, ativo: true }, tm);
+const idSala = n => ok('cadastro.opcoes', {}).salas.find(x => x.nome === n).id;
+const sala = ok('estrutura.salvarSala', { id: idSala('Porto de Galinhas - Dia'), nome: 'Porto de Galinhas - Dia', regional_id: rgl.id, limite_pct: 10, ativo: true }, tm);
+const sala2 = ok('estrutura.salvarSala', { id: idSala('Muro Alto'), nome: 'Muro Alto', regional_id: rgl.id, limite_pct: 0, ativo: true }, tm);
 falha('estrutura.salvarSala', { nome: 'muro alto', regional_id: rgl.id }, tm);
 const ger = novoUsuario('Gabriela Gerente', 'ger@gav.dev', 'gerente', { sala_id: sala.id });
 const ass = novoUsuario('Ana Assistente', 'ass@gav.dev', 'assistente', { sala_id: sala.id });
@@ -62,7 +63,7 @@ const con = novoUsuario('Carlos Consultor', 'con@gav.dev', 'consultor', { sala_i
 const con2 = novoUsuario('Cíntia Consultora', 'con2@gav.dev', 'consultor', { sala_id: sala2.id });
 falha('usuarios.salvar', { nome: 'Sem sala', email: 'x@gav.dev', perfil: 'consultor' }, tm);
 const est = ok('estrutura.obter', {}, tm);
-assert.strictEqual(est.salas.length, 2);
+assert.strictEqual(est.salas.filter(x => x.regional_id === rgl.id).length, 2);
 assert.strictEqual(est.regionais[0].gestor_nome, 'Rafael Regional');
 passo('estrutura: diretoria → regional → salas com superintendente, regional, gerente, assistente e consultores');
 
@@ -161,5 +162,61 @@ ok('usuarios.salvar', { id: con2.id, nome: 'Cíntia Consultora', email: con2.ema
 falha('dashboard.obter', {}, tc2, 'SESSAO');
 falha('usuarios.salvar', { id: ok('auth.eu', {}, tm).id, nome: 'Master', email: 'master@gav.dev', perfil: 'gerente', sala_id: sala.id }, tm);
 passo('usuário desativado perde o acesso na hora; master não remove o próprio acesso');
+
+
+// --- autocadastro com aprovação do master
+const opc = ok('cadastro.opcoes', {});
+assert.ok(opc.salas.length >= 24, 'salas padrão devem existir');
+assert.ok(opc.salas.some(x => x.nome === 'Porto de Galinhas - Dia'));
+const salaGunga = opc.salas.find(x => x.nome === 'Gunga');
+falha('cadastro.solicitar', { nome: 'Teste Sem Sala', email: 'semsala@gav.dev', perfil: 'consultor', senha: 'Senha1234' });
+falha('cadastro.solicitar', { nome: 'Teste Master', email: 'm2@gav.dev', perfil: 'master', senha: 'Senha1234' });
+ok('cadastro.solicitar', { nome: 'Paula Pereira', email: 'paula@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, senha: 'Paula1234' });
+falha('cadastro.solicitar', { nome: 'Paula Pereira', email: 'paula@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, senha: 'Paula1234' });
+falha('auth.login', { email: 'paula@gav.dev', senha: 'Paula1234' }, null, 'CADASTRO_PENDENTE');
+assert.strictEqual(ok('notificacoes.listar', {}, tm).cadastros_pendentes, 1);
+assert.ok(estado.emails.some(e => e.to === 'master@gav.dev' && /aguardando/.test(e.subject)));
+const paula = ok('usuarios.listar', {}, tm).find(x => x.email === 'paula@gav.dev');
+assert.strictEqual(paula.cadastro, 'pendente');
+ok('usuarios.aprovarCadastro', { id: paula.id }, tm);
+assert.ok(estado.emails.some(e => e.to === 'paula@gav.dev' && /liberado/.test(e.subject)));
+const tp = ok('auth.login', { email: 'paula@gav.dev', senha: 'Paula1234' }).token;
+assert.strictEqual(ok('auth.eu', {}, tp).sala_nome, 'Gunga');
+ok('cadastro.solicitar', { nome: 'Rui Recusado', email: 'rui@gav.dev', perfil: 'gerente', sala_id: salaGunga.id, senha: 'Rui12345' });
+ok('usuarios.recusarCadastro', { id: ok('usuarios.listar', {}, tm).find(x => x.email === 'rui@gav.dev').id, motivo: 'Não faz parte da equipe' }, tm);
+falha('auth.login', { email: 'rui@gav.dev', senha: 'Rui12345' }, null, 'CADASTRO_RECUSADO');
+passo('autocadastro: escolhe função e sala, entra só depois da aprovação do master (e-mails enviados)');
+
+// --- diretoria: o master aponta as diretorias na aprovação
+ok('cadastro.solicitar', { nome: 'Diana Diretora', email: 'diana@gav.dev', perfil: 'diretor', senha: 'Diana1234' });
+const diana = ok('usuarios.listar', {}, tm).find(x => x.email === 'diana@gav.dev');
+falha('usuarios.aprovarCadastro', { id: diana.id }, tm);
+ok('usuarios.aprovarCadastro', { id: diana.id, vinculo_ids: [dir.id] }, tm);
+const tdd = ok('auth.login', { email: 'diana@gav.dev', senha: 'Diana1234' }).token;
+assert.strictEqual(ok('dashboard.obter', {}, tdd).salas.length, 2);
+assert.match(ok('auth.eu', {}, tdd).vinculo, /Diretoria Nordeste/);
+passo('diretoria: só enxerga as diretorias que o master vinculou');
+
+// --- assistente recebe retorno também das negativas
+const antes = ok('notificacoes.listar', {}, ta).nao_lidas;
+const s4 = ok('solicitacoes.criar', { tipo_id: tipoGer.id, cliente: 'Lia Souza', cpf: '11144477735', campos, justificativa: 'Mais uma exceção de teste.' }, tc);
+ok('solicitacoes.responder', { id: s4.id, decisao: 'negada', resposta: 'Fora da política, sem exceção.' }, tr);
+assert.strictEqual(ok('notificacoes.listar', {}, ta).nao_lidas, antes + 1);
+passo('assistente de contratos recebe o retorno de aprovadas e negadas');
+
+// --- recuperação de senha por e-mail
+const nEmails = estado.emails.length;
+ok('auth.esqueciSenha', { email: 'naoexiste@gav.dev' });
+assert.strictEqual(estado.emails.length, nEmails, 'não envia para e-mail inexistente');
+ok('auth.esqueciSenha', { email: 'paula@gav.dev' });
+const mail = estado.emails[estado.emails.length - 1];
+assert.strictEqual(mail.to, 'paula@gav.dev');
+const codigoEmail = mail.subject.match(/(\d{6})$/)[1];
+falha('auth.redefinirComCodigo', { email: 'paula@gav.dev', codigo: '000000', nova_senha: 'NovaPaula1' }, null, 'CODIGO');
+ok('auth.redefinirComCodigo', { email: 'paula@gav.dev', codigo: codigoEmail, nova_senha: 'NovaPaula1' });
+falha('dashboard.obter', {}, tp, 'SESSAO');
+ok('auth.login', { email: 'paula@gav.dev', senha: 'NovaPaula1' });
+falha('auth.redefinirComCodigo', { email: 'paula@gav.dev', codigo: codigoEmail, nova_senha: 'Outra1234' }, null, 'CODIGO');
+passo('recuperação de senha: código por e-mail, uso único, derruba sessões antigas');
 
 console.info('\nTodos os testes passaram.');

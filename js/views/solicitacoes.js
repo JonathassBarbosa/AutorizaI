@@ -42,7 +42,7 @@ function criarLista(paraMim) {
 
       return html`
         <div class="cabecalho">
-          <div><h2 style="font-size:22px">${u.perfil === 'consultor' ? 'Minhas solicitações' : 'Solicitações'}</h2>
+          <div><h2 style="font-size:22px">${{ consultor: 'Minhas solicitações', assistente: 'Retornos da sala' }[u.perfil] || 'Solicitações'}</h2>
             <p>${lista.total} ${lista.total === 1 ? 'resultado' : 'resultados'}${lista.total > lista.itens.length ? ` (mostrando ${lista.itens.length})` : ''}</p></div>
           <div class="acoes">${u.perfil !== 'assistente' ? html`<a class="btn btn-ouro" href="#/nova">${icone('mais')} Nova</a>` : ''}</div>
         </div>

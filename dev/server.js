@@ -1,5 +1,5 @@
 /**
- * Servidor de desenvolvimento: serve o app (pasta app/) e executa o Code.gs
+ * Servidor de desenvolvimento: serve o site (raiz do repositório) e executa o Code.gs
  * real com serviços simulados do Google. Uso:
  *
  *   node dev/server.js            → http://localhost:8080
@@ -12,7 +12,7 @@ const vm = require('vm');
 const { criarServicos } = require('./gas-mock');
 
 const PORTA = Number(process.env.PORT || 8080);
-const RAIZ = path.join(__dirname, '..', 'app');
+const RAIZ = path.join(__dirname, '..'); // o site fica na raiz do repositório
 const ARQ_DADOS = path.join(__dirname, 'dados-dev.json');
 const ARQ_GS = path.join(__dirname, '..', 'apps-script', 'Code.gs');
 

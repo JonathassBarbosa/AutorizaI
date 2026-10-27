@@ -218,9 +218,10 @@ svg.i { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none;
 .grade-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grade-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grade-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.grade-lateral { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+.grade-lateral { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
 .grade > * { min-width: 0; }
-@media (max-width: 1100px) { .grade-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grade-lateral { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1380px) { .grade-lateral { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1100px) { .grade-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .grade-2, .grade-3 { grid-template-columns: 1fr; } }
 .espaco { height: 16px; }
 
@@ -497,3 +498,33 @@ dl.dados dd { margin: 4px 0 0; font-weight: 500; word-break: break-word; }
   .doc-autorizacao .assinaturas { display: flex; gap: 40px; margin-top: 64px; }
   .doc-autorizacao .assinaturas div { flex: 1; border-top: 1px solid #000; padding-top: 6px; text-align: center; }
 }
+
+.divisor { display: flex; align-items: center; gap: 12px; margin: 22px 0 14px; color: var(--muted); font-size: 13px; }
+.divisor::before, .divisor::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* Fila de cadastros pendentes */
+.pendente-item { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.pendente-item:last-child { border-bottom: 0; }
+.pendente-dados { flex: 1; min-width: 0; }
+.pendente-dados .secundario { overflow: hidden; text-overflow: ellipsis; }
+.pendente-acoes { display: flex; gap: 8px; flex: none; }
+@media (max-width: 640px) {
+  .pendente-item { flex-wrap: wrap; padding: 14px 16px; }
+  .pendente-acoes { width: 100%; }
+  .pendente-acoes .btn { flex: 1; }
+}
+
+/* Tabelas que viram cartões em telas estreitas */
+@media (max-width: 860px) {
+  .tabela.cartoes thead { display: none; }
+  .tabela.cartoes, .tabela.cartoes tbody { display: block; width: 100%; }
+  .tabela.cartoes tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .tabela.cartoes tr:last-child { border-bottom: 0; }
+  .tabela.cartoes td { display: block; border: 0; padding: 0; text-align: left; min-width: 0 !important; }
+  .tabela.cartoes td[data-rotulo]::before { content: attr(data-rotulo); display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-bottom: 2px; }
+  .tabela.cartoes .cel-cheia { grid-column: 1 / -1; }
+  .tabela.cartoes .num { text-align: left; }
+  .tabela.cartoes .btn { width: 100%; }
+}
+#acoes code { overflow-wrap: anywhere; font-size: 12px; }
+.tabela.cartoes .secundario { overflow-wrap: anywhere; }

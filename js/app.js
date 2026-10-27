@@ -5,6 +5,8 @@ import { html, api, sessao, icone, iniciais, PERFIS, APROVADORES, relativo, toas
 import { iniciarPush, sairPush } from './push.js';
 import { assinatura, rosaSvg, abertura } from './marcas.js';
 import login from './views/login.js';
+import cadastro from './views/cadastro.js';
+import recuperar from './views/recuperar.js';
 import trocarSenha from './views/trocar-senha.js';
 import inicio from './views/inicio.js';
 import { listaSolicitacoes, listaAprovacoes } from './views/solicitacoes.js';
@@ -18,23 +20,24 @@ import monitor from './views/monitor.js';
 import perfil from './views/perfil.js';
 
 const TODOS = Object.keys(PERFIS);
-const QUEM_CRIA = ['consultor', 'gerente', 'regional', 'superintendente', 'master'];
-const QUEM_VERIFICA = ['assistente', 'gerente', 'regional', 'superintendente', 'master'];
+const QUEM_CRIA = ['consultor', 'gerente', 'regional', 'superintendente', 'diretor', 'master']; // o assistente não solicita
+const QUEM_VERIFICA = ['assistente', 'gerente', 'regional', 'superintendente', 'diretor', 'master'];
 
 const VIEWS = {
-  login, 'trocar-senha': trocarSenha, inicio, solicitacoes: listaSolicitacoes, aprovacoes: listaAprovacoes,
+  login, cadastro, recuperar, 'trocar-senha': trocarSenha, inicio, solicitacoes: listaSolicitacoes, aprovacoes: listaAprovacoes,
   solicitacao: detalhe, nova, verificar, estrutura, usuarios, tipos, monitor, perfil,
 };
 
 const MENU = [
   { rota: 'inicio', titulo: 'Início', icone: 'home', perfis: TODOS, barra: true },
-  { rota: 'solicitacoes', titulo: 'Solicitações', icone: 'lista', perfis: TODOS, barra: true },
+  { rota: 'solicitacoes', titulo: 'Solicitações', icone: 'lista', perfis: TODOS.filter(p => p !== 'assistente'), barra: true },
+  { rota: 'solicitacoes', titulo: 'Retornos', icone: 'lista', perfis: ['assistente'], barra: true },
   { rota: 'aprovacoes', titulo: 'Aprovações', icone: 'escudo', perfis: APROVADORES, barra: true, contador: 'para_aprovar' },
   { rota: 'nova', titulo: 'Nova solicitação', icone: 'mais', perfis: QUEM_CRIA, barra: true },
   { rota: 'verificar', titulo: 'Verificar autorização', icone: 'busca', perfis: QUEM_VERIFICA, barra: true },
   { secao: 'Administração', perfis: ['master'] },
   { rota: 'estrutura', titulo: 'Estrutura', icone: 'organo', perfis: ['master'] },
-  { rota: 'usuarios', titulo: 'Usuários', icone: 'usuarios', perfis: ['master'] },
+  { rota: 'usuarios', titulo: 'Usuários', icone: 'usuarios', perfis: ['master'], contador: 'cadastros_pendentes' },
   { rota: 'tipos', titulo: 'Tipos de exceção', icone: 'etiqueta', perfis: ['master'] },
   { rota: 'monitor', titulo: 'Monitor', icone: 'pulso', perfis: ['master'] },
 ];
@@ -54,8 +57,9 @@ export const ir = (rota) => { location.hash = '#/' + rota; };
 async function navegar() {
   const rota = lerRota();
   const s = sessao.ler();
-  if (!s && rota.nome !== 'login') return ir('login');
-  if (s && rota.nome === 'login') return ir('inicio');
+  const publica = VIEWS[rota.nome]?.publica || rota.nome === 'login';
+  if (!s && !publica) return ir('login');
+  if (s && publica) return ir('inicio');
   if (s?.usuario?.trocar_senha && rota.nome !== 'trocar-senha') return ir('trocar-senha');
 
   const view = VIEWS[rota.nome];
