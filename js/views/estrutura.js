@@ -19,6 +19,19 @@ function cardSala(s) {
   </div>`;
 }
 
+/** Regionais agrupadas pelo superintendente responsável (Diretoria → Superintendente → Regional). */
+function porSuperintendente(regionais) {
+  const grupos = [];
+  regionais.forEach(r => {
+    let g = grupos.find(x => x.id === r.superintendente_id);
+    if (!g) grupos.push(g = { id: r.superintendente_id, nome: r.superintendente_nome, regionais: [] });
+    g.regionais.push(r);
+  });
+  return grupos.sort((a, b) => (a.id ? 0 : 1) - (b.id ? 0 : 1) || a.nome.localeCompare(b.nome)).map(g => html`<div class="org-sup">
+    <div class="org-sup-topo">${pessoa(g.nome, 'Superintendente')}</div>
+    <div class="org-regionais">${g.regionais.map(blocoRegional)}</div></div>`);
+}
+
 function blocoRegional(r) {
   const salas = est.salas.filter(s => s.regional_id === r.id);
   return html`<div class="org-reg">
@@ -48,19 +61,19 @@ export default {
         </div>
       </div>
       ${nada ? html`<div class="card">${vazio('Comece pela estrutura',
-        html`1) Cadastre os <a href="#/usuarios">usuários</a> da diretoria, superintendentes e regionais · 2) crie a diretoria · 3) as regionais · 4) vincule as salas às regionais · 5) aprove gerentes de sala, consultores de vendas e assistentes de contratos.`, 'organo')}</div>` : ''}
+        html`1) Crie a diretoria · 2) crie as regionais, apontando a diretoria, o superintendente e o regional de cada uma · 3) vincule as salas às regionais · 4) aprove gerentes de sala, consultores de vendas e assistentes de contratos em <a href="#/usuarios">Usuários</a>.`, 'organo')}</div>` : ''}
 
       ${est.diretorias.map(d => html`<div class="card org-dir">
         <div class="card-topo"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
           <h3 style="font-size:17px">${d.nome}${d.ativo ? '' : ' (inativa)'}</h3>
-          ${d.diretores.map(n => pessoa(n, 'Diretoria'))}${pessoa(d.superintendente_nome, 'Superintendente')}</div>
+          ${d.diretores.length ? d.diretores.map(n => pessoa(n, 'Diretoria')) : pessoa('', 'Diretoria')}</div>
           <button class="editar-link" data-editar="diretoria" data-id="${d.id}" title="Editar diretoria">${icone('editar')}</button></div>
-        <div class="org-regionais">${est.regionais.filter(r => r.diretoria_id === d.id).map(blocoRegional)}
+        <div class="org-regionais">${porSuperintendente(est.regionais.filter(r => r.diretoria_id === d.id))}
           ${!est.regionais.some(r => r.diretoria_id === d.id) ? html`<span class="secundario">Nenhuma regional nesta diretoria.</span>` : ''}</div>
       </div>`)}
 
       ${regSemDir.length ? html`<div class="card org-dir"><div class="card-topo"><h3>Regionais sem diretoria</h3></div>
-        <div class="org-regionais">${regSemDir.map(blocoRegional)}</div></div>` : ''}
+        <div class="org-regionais">${porSuperintendente(regSemDir)}</div></div>` : ''}
       ${salasSemReg.length ? html`<div class="card org-dir"><div class="card-topo"><h3>Salas sem regional</h3></div>
         <div class="org-salas" style="padding:16px">${salasSemReg.map(cardSala)}</div></div>` : ''}`;
   },
@@ -75,12 +88,12 @@ export default {
       let corpo;
       if (tipo === 'diretoria') {
         corpo = html`<div class="campo"><label>Nome da diretoria</label><input class="entrada" name="nome" value="${reg.nome || ''}" required></div>
-          <div class="campo"><label>Superintendente</label><select class="entrada" name="superintendente_id">
-            ${opcoes(superintendentes, reg.superintendente_id, '— sem superintendente —')}</select>
-            <small>Só aparecem usuários com perfil Superintendente.</small></div>`;
+          <div class="aviso aviso-azul">${icone('usuarios')}<div>Os diretores são vinculados à diretoria no cadastro de <a href="#/usuarios">Usuários</a>. Os superintendentes, em cada regional.</div></div>`;
       } else if (tipo === 'regional') {
         corpo = html`<div class="campo"><label>Nome da regional</label><input class="entrada" name="nome" value="${reg.nome || ''}" required></div>
           <div class="campo"><label>Diretoria</label><select class="entrada" name="diretoria_id">${opcoes(est.diretorias, reg.diretoria_id, '— sem diretoria —')}</select></div>
+          <div class="campo"><label>Superintendente</label><select class="entrada" name="superintendente_id">
+            ${opcoes(superintendentes, reg.superintendente_id, '— sem superintendente —')}</select><small>Só aparecem usuários com perfil Superintendente.</small></div>
           <div class="campo"><label>Regional responsável</label><select class="entrada" name="gestor_id">
             ${opcoes(regionaisPessoas, reg.gestor_id, '— sem regional —')}</select><small>Só aparecem usuários com perfil Regional.</small></div>`;
       } else {

@@ -51,8 +51,8 @@ const novoUsuario = (nome, email, perfil, extra) => {
 };
 const sup = novoUsuario('Sofia Superintendente', 'sup@gav.dev', 'superintendente');
 const reg = novoUsuario('Rafael Regional', 'reg@gav.dev', 'regional');
-const dir = ok('estrutura.salvarDiretoria', { nome: 'Diretoria Nordeste', superintendente_id: sup.id, ativo: true }, tm);
-const rgl = ok('estrutura.salvarRegional', { nome: 'Regional Pernambuco', diretoria_id: dir.id, gestor_id: reg.id, ativo: true }, tm);
+const dir = ok('estrutura.salvarDiretoria', { nome: 'Diretoria Nordeste', ativo: true }, tm);
+const rgl = ok('estrutura.salvarRegional', { nome: 'Regional Pernambuco', diretoria_id: dir.id, gestor_id: reg.id, superintendente_id: sup.id, ativo: true }, tm);
 const idSala = n => ok('cadastro.opcoes', {}).salas.find(x => x.nome === n).id;
 const sala = ok('estrutura.salvarSala', { id: idSala('Porto de Galinhas - Dia'), nome: 'Porto de Galinhas - Dia', regional_id: rgl.id, limite_pct: 10, ativo: true }, tm);
 const sala2 = ok('estrutura.salvarSala', { id: idSala('Muro Alto'), nome: 'Muro Alto', regional_id: rgl.id, limite_pct: 0, ativo: true }, tm);
@@ -65,7 +65,9 @@ falha('usuarios.salvar', { nome: 'Sem sala', email: 'x@gav.dev', perfil: 'consul
 const est = ok('estrutura.obter', {}, tm);
 assert.strictEqual(est.salas.filter(x => x.regional_id === rgl.id).length, 2);
 assert.strictEqual(est.regionais[0].gestor_nome, 'Rafael Regional');
-passo('estrutura: diretoria → regional → salas com superintendente, regional, gerente, assistente e consultores');
+assert.strictEqual(est.regionais[0].superintendente_nome, 'Sofia Superintendente');
+assert.ok(ok('usuarios.listar', {}, tm).find(x => x.id === sup.id).vinculo.startsWith('Regionais: Regional Pernambuco'));
+passo('estrutura: diretoria → superintendente → regional → salas com gerente, consultores e assistente');
 
 const tc = entrar(con.email, con.senha, 'Consultor1');
 const tg = entrar(ger.email, ger.senha, 'Gerente1');

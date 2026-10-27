@@ -7,6 +7,13 @@ let filtro = { perfil: '', busca: '' };
 
 const PERFIS_DE_SALA = ['gerente', 'assistente', 'consultor'];
 
+/** Diretoria responde por diretorias; Superintendente e Regional, por regionais. */
+function vinculoDoPerfil(p) {
+  if (p === 'diretor') return { titulo: 'Diretorias', singular: 'diretoria', lista: est.diretorias.map(x => ({ id: x.id, rotulo: x.nome })) };
+  return { titulo: 'Regionais', singular: 'regional',
+    lista: est.regionais.map(x => ({ id: x.id, rotulo: x.diretoria_nome ? `${x.nome} — ${x.diretoria_nome}` : x.nome })) };
+}
+
 function mostrarSenha(nome, email, senha) {
   const texto = `Acesso ao GAV Autorizações\nEndereço: ${location.origin + location.pathname}\nE-mail: ${email}\nSenha provisória: ${senha}`;
   const m = modal({
@@ -111,11 +118,11 @@ export default {
             <option value="">Selecione…</option>${est.salas.map(s => html`<option value="${s.id}" ${s.id === u.sala_id ? 'selected' : ''}>${s.nome}${s.regional_nome ? ` — ${s.regional_nome}` : ''}</option>`)}</select>
             ${!est.salas.length ? html`<small>Nenhuma sala cadastrada ainda. Crie em <a href="#/estrutura">Estrutura</a>.</small>` : ''}</div>`;
         } else if (p === 'superintendente' || p === 'regional' || p === 'diretor') {
-          const lista = p === 'regional' ? est.regionais : est.diretorias;
+          const v = vinculoDoPerfil(p);
           const marcados = u.perfil === p ? (u.vinculo_ids || []) : [];
-          h = html`<div class="campo"><span class="rotulo">${p === 'regional' ? 'Regionais sob responsabilidade' : 'Diretorias sob responsabilidade'}</span>
-            ${lista.length ? html`<div class="grade grade-2" style="gap:8px">${lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}" ${marcados.includes(x.id) ? 'checked' : ''}> ${x.nome}</label>`)}</div>`
-              : html`<small>Nenhuma ${p === 'regional' ? 'regional' : 'diretoria'} cadastrada. Você pode vincular depois em Estrutura.</small>`}</div>`;
+          h = html`<div class="campo"><span class="rotulo">${v.titulo} sob responsabilidade</span>
+            ${v.lista.length ? html`<div class="grade grade-2" style="gap:8px">${v.lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}" ${marcados.includes(x.id) ? 'checked' : ''}> ${x.rotulo}</label>`)}</div>`
+              : html`<small>Nenhuma ${v.singular} cadastrada. Você pode vincular depois em Estrutura.</small>`}</div>`;
         } else {
           h = html`<div class="aviso aviso-azul" style="margin-bottom:16px">${icone('escudo')}<div>Master tem acesso total ao sistema.</div></div>`;
         }
@@ -169,11 +176,10 @@ export default {
           caixa.innerHTML = html`<div class="campo"><label>Sala de vendas</label><select class="entrada" name="sala_id">
             <option value="">Selecione…</option>${est.salas.map(s => html`<option value="${s.id}" ${s.id === u.sala_id ? 'selected' : ''}>${s.nome}</option>`)}</select></div>`.toString();
         } else {
-          const lista = p === 'regional' ? est.regionais : est.diretorias;
-          const nomeLista = p === 'regional' ? 'Regionais' : 'Diretorias';
-          caixa.innerHTML = html`<div class="campo"><span class="rotulo">${nomeLista} sob responsabilidade de ${u.nome.split(' ')[0]}</span>
-            ${lista.length ? html`<div class="grade grade-2" style="gap:8px">${lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}"> ${x.nome}</label>`)}</div>`
-              : html`<div class="aviso aviso-ambar">${icone('alerta')}<div>Nenhuma ${p === 'regional' ? 'regional' : 'diretoria'} cadastrada. Crie primeiro em <a href="#/estrutura">Estrutura</a>.</div></div>`}</div>`.toString();
+          const v = vinculoDoPerfil(p);
+          caixa.innerHTML = html`<div class="campo"><span class="rotulo">${v.titulo} sob responsabilidade de ${u.nome.split(' ')[0]}</span>
+            ${v.lista.length ? html`<div class="grade grade-2" style="gap:8px">${v.lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}"> ${x.rotulo}</label>`)}</div>`
+              : html`<div class="aviso aviso-ambar">${icone('alerta')}<div>Nenhuma ${v.singular} cadastrada. Crie primeiro em <a href="#/estrutura">Estrutura</a>.</div></div>`}</div>`.toString();
         }
       };
       desenhar();

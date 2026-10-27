@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.3.0',
+  VERSAO: '1.4.0',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -44,7 +44,7 @@ const SALAS_PADRAO = [
 const ABAS = {
   Usuarios: ['id', 'nome', 'email', 'telefone', 'perfil', 'sala_id', 'ativo', 'senha_hash', 'salt', 'trocar_senha', 'criado_em', 'ultimo_acesso', 'cadastro'],
   Diretorias: ['id', 'nome', 'superintendente_id', 'ativo', 'criado_em', 'diretores'],
-  Regionais: ['id', 'nome', 'diretoria_id', 'gestor_id', 'ativo', 'criado_em'],
+  Regionais: ['id', 'nome', 'diretoria_id', 'gestor_id', 'ativo', 'criado_em', 'superintendente_id'],
   Salas: ['id', 'nome', 'regional_id', 'limite_pct', 'ativo', 'criado_em'],
   Tipos: ['id', 'nome', 'descricao', 'alcada', 'campos', 'ativo', 'criado_em'],
   Solicitacoes: ['id', 'codigo', 'tipo_id', 'tipo_nome', 'sala_id', 'consultor_id', 'consultor_nome', 'cliente', 'cpf',
@@ -486,7 +486,7 @@ function salasDoUsuario_(u) {
   } else if (u.perfil === 'diretor') {
     ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.dir && listaIds_(c.dir.diretores).indexOf(u.id) >= 0; });
   } else if (u.perfil === 'superintendente') {
-    ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.dir && c.dir.superintendente_id === u.id; });
+    ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.reg && c.reg.superintendente_id === u.id; });
   } else if (u.perfil === 'regional') {
     ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.reg && c.reg.gestor_id === u.id; });
   } else {
@@ -517,7 +517,7 @@ function aprovadoresDoNivel_(salaId, nivel) {
   const ativos = ler_('Usuarios').filter(u => bool_(u.ativo));
   if (nivel === 'gerente') return ativos.filter(u => u.perfil === 'gerente' && u.sala_id === salaId);
   if (nivel === 'regional') return c.reg && c.reg.gestor_id ? ativos.filter(u => u.id === c.reg.gestor_id) : [];
-  if (nivel === 'superintendente') return c.dir && c.dir.superintendente_id ? ativos.filter(u => u.id === c.dir.superintendente_id) : [];
+  if (nivel === 'superintendente') return c.reg && c.reg.superintendente_id ? ativos.filter(u => u.id === c.reg.superintendente_id) : [];
   if (nivel === 'diretor') return c.dir ? ativos.filter(u => u.perfil === 'diretor' && listaIds_(c.dir.diretores).indexOf(u.id) >= 0) : [];
   return ativos.filter(u => u.perfil === 'master');
 }
@@ -566,8 +566,8 @@ function vinculoTexto_(u) {
     return l.length ? 'Diretoria: ' + l.join(', ') : 'Sem diretoria vinculada';
   }
   if (u.perfil === 'superintendente') {
-    const l = Object.keys(e.dir).map(k => e.dir[k]).filter(d => d.superintendente_id === u.id).map(d => d.nome);
-    return l.length ? 'Diretoria: ' + l.join(', ') : 'Sem diretoria vinculada';
+    const l = Object.keys(e.reg).map(k => e.reg[k]).filter(r => r.superintendente_id === u.id).map(r => r.nome);
+    return l.length ? 'Regionais: ' + l.join(', ') : 'Sem regional vinculada';
   }
   if (u.perfil === 'regional') {
     const l = Object.keys(e.reg).map(k => e.reg[k]).filter(r => r.gestor_id === u.id).map(r => r.nome);
@@ -853,12 +853,13 @@ function obterEstrutura_(d, u) {
   if (u.perfil !== 'master') return { salas: salasOut };
   return {
     diretorias: Object.keys(e.dir).map(k => e.dir[k]).map(x => ({
-      id: x.id, nome: x.nome, superintendente_id: x.superintendente_id, superintendente_nome: nome(x.superintendente_id), ativo: bool_(x.ativo),
+      id: x.id, nome: x.nome, ativo: bool_(x.ativo),
       diretores: listaIds_(x.diretores).map(nome).filter(Boolean),
     })).sort((a, b) => a.nome.localeCompare(b.nome)),
     regionais: Object.keys(e.reg).map(k => e.reg[k]).map(x => ({
       id: x.id, nome: x.nome, diretoria_id: x.diretoria_id, diretoria_nome: (e.dir[x.diretoria_id] || {}).nome || '',
       gestor_id: x.gestor_id, gestor_nome: nome(x.gestor_id), ativo: bool_(x.ativo),
+      superintendente_id: x.superintendente_id || '', superintendente_nome: nome(x.superintendente_id),
     })).sort((a, b) => a.nome.localeCompare(b.nome)),
     salas: salasOut,
     usuarios: usuarios.filter(p => p.cadastro !== 'pendente' && p.cadastro !== 'recusado')
@@ -875,9 +876,7 @@ function nomeUnico_(aba, nome, id) {
 function salvarDiretoria_(d, u) {
   const nome = texto_(d.nome, 'Nome da diretoria', 2, 80);
   nomeUnico_('Diretorias', nome, d.id);
-  const sup = d.superintendente_id ? buscar_('Usuarios', d.superintendente_id) : null;
-  if (d.superintendente_id && (!sup || sup.perfil !== 'superintendente')) throw falha_('Selecione um usuário com perfil Superintendente.');
-  const r = salvarRegistro_('Diretorias', d.id, { nome: nome, superintendente_id: sup ? sup.id : '', ativo: boolTxt_(d.ativo) }, 'D');
+  const r = salvarRegistro_('Diretorias', d.id, { nome: nome, ativo: boolTxt_(d.ativo) }, 'D');
   auditar_(u, d.id ? 'editou' : 'criou', 'diretoria', r.id, nome);
   return limpo_(r);
 }
@@ -888,8 +887,11 @@ function salvarRegional_(d, u) {
   if (d.diretoria_id && !estrutura_().dir[d.diretoria_id]) throw falha_('Diretoria inválida.');
   const gestor = d.gestor_id ? buscar_('Usuarios', d.gestor_id) : null;
   if (d.gestor_id && (!gestor || gestor.perfil !== 'regional')) throw falha_('Selecione um usuário com perfil Regional.');
+  const sup = d.superintendente_id ? buscar_('Usuarios', d.superintendente_id) : null;
+  if (d.superintendente_id && (!sup || sup.perfil !== 'superintendente')) throw falha_('Selecione um usuário com perfil Superintendente.');
   const r = salvarRegistro_('Regionais', d.id, {
-    nome: nome, diretoria_id: d.diretoria_id || '', gestor_id: gestor ? gestor.id : '', ativo: boolTxt_(d.ativo),
+    nome: nome, diretoria_id: d.diretoria_id || '', gestor_id: gestor ? gestor.id : '',
+    superintendente_id: sup ? sup.id : '', ativo: boolTxt_(d.ativo),
   }, 'R');
   auditar_(u, d.id ? 'editou' : 'criou', 'regional', r.id, nome);
   return limpo_(r);
@@ -911,7 +913,7 @@ function salvarSala_(d, u) {
 // ============================================================================
 function vinculosDe_(u) {
   if (u.perfil === 'diretor') return ler_('Diretorias').filter(x => listaIds_(x.diretores).indexOf(u.id) >= 0).map(x => x.id);
-  if (u.perfil === 'superintendente') return ler_('Diretorias').filter(x => x.superintendente_id === u.id).map(x => x.id);
+  if (u.perfil === 'superintendente') return ler_('Regionais').filter(x => x.superintendente_id === u.id).map(x => x.id);
   if (u.perfil === 'regional') return ler_('Regionais').filter(x => x.gestor_id === u.id).map(x => x.id);
   return [];
 }
@@ -959,16 +961,13 @@ function salvarUsuario_(d, u) {
   return { usuario: Object.assign(perfilPublico_(registro), { vinculo_ids: vinculosDe_(registro) }), senha_temporaria: senhaTemp };
 }
 
-/** Superintendente → diretorias; Regional → regionais. Ao mudar de perfil, os vínculos antigos são removidos. */
+/** Diretoria → diretorias; Superintendente e Regional → regionais. Ao mudar de perfil, os vínculos antigos são removidos. */
 function aplicarVinculos_(reg, ids) {
   const ehSup = reg.perfil === 'superintendente';
   const ehReg = reg.perfil === 'regional';
   const ehDir = reg.perfil === 'diretor';
   ler_('Diretorias').forEach(x => {
     const alt = {};
-    const deve = ehSup && (ids ? ids.indexOf(x.id) >= 0 : x.superintendente_id === reg.id);
-    if (deve && x.superintendente_id !== reg.id) alt.superintendente_id = reg.id;
-    if (!deve && x.superintendente_id === reg.id) alt.superintendente_id = '';
     const diretores = listaIds_(x.diretores);
     const tem = diretores.indexOf(reg.id) >= 0;
     const deveDir = ehDir && (ids ? ids.indexOf(x.id) >= 0 : tem);
@@ -977,9 +976,14 @@ function aplicarVinculos_(reg, ids) {
     if (Object.keys(alt).length) atualizar_('Diretorias', x, alt);
   });
   ler_('Regionais').forEach(x => {
+    const alt = {};
     const deve = ehReg && (ids ? ids.indexOf(x.id) >= 0 : x.gestor_id === reg.id);
-    if (deve && x.gestor_id !== reg.id) atualizar_('Regionais', x, { gestor_id: reg.id });
-    if (!deve && x.gestor_id === reg.id) atualizar_('Regionais', x, { gestor_id: '' });
+    if (deve && x.gestor_id !== reg.id) alt.gestor_id = reg.id;
+    if (!deve && x.gestor_id === reg.id) alt.gestor_id = '';
+    const deveSup = ehSup && (ids ? ids.indexOf(x.id) >= 0 : x.superintendente_id === reg.id);
+    if (deveSup && x.superintendente_id !== reg.id) alt.superintendente_id = reg.id;
+    if (!deveSup && x.superintendente_id === reg.id) alt.superintendente_id = '';
+    if (Object.keys(alt).length) atualizar_('Regionais', x, alt);
   });
 }
 
@@ -1058,7 +1062,7 @@ function aprovarCadastro_(d, u) {
   }
   const ids = Array.isArray(d.vinculo_ids) ? d.vinculo_ids : [];
   if (['regional', 'superintendente', 'diretor'].indexOf(perfil) >= 0 && !ids.length) {
-    throw falha_('Marque pelo menos uma ' + (perfil === 'regional' ? 'regional' : 'diretoria') + ' sob responsabilidade deste usuário.');
+    throw falha_('Marque pelo menos uma ' + (perfil === 'diretor' ? 'diretoria' : 'regional') + ' sob responsabilidade deste usuário.');
   }
   const reg = atualizar_('Usuarios', alvo, { perfil: perfil, sala_id: salaId, ativo: 'true', cadastro: 'aprovado' });
   aplicarVinculos_(reg, ids);

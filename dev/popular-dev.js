@@ -29,9 +29,9 @@ async function chamar(action, data, token) {
   const sup = await usuario('Natássia Lima', 'superintendente@gav.dev', 'superintendente');
   const regPe = await usuario('Edson Rocha', 'regional.pe@gav.dev', 'regional');
   const regRs = await usuario('Krys Andrade', 'regional.rs@gav.dev', 'regional');
-  const dir = await chamar('estrutura.salvarDiretoria', { nome: 'Diretoria Comercial', superintendente_id: sup.id, ativo: true }, tm);
-  const rPe = await chamar('estrutura.salvarRegional', { nome: 'Regional Nordeste', diretoria_id: dir.id, gestor_id: regPe.id, ativo: true }, tm);
-  const rRs = await chamar('estrutura.salvarRegional', { nome: 'Regional Sul', diretoria_id: dir.id, gestor_id: regRs.id, ativo: true }, tm);
+  const dir = await chamar('estrutura.salvarDiretoria', { nome: 'Diretoria Comercial', ativo: true }, tm);
+  const rPe = await chamar('estrutura.salvarRegional', { nome: 'Regional Nordeste', diretoria_id: dir.id, gestor_id: regPe.id, superintendente_id: sup.id, ativo: true }, tm);
+  const rRs = await chamar('estrutura.salvarRegional', { nome: 'Regional Sul', diretoria_id: dir.id, gestor_id: regRs.id, superintendente_id: sup.id, ativo: true }, tm);
   const salas = {};
   const existentes = (await chamar('cadastro.opcoes', {})).salas;
   for (const [nome, reg, lim] of [['Porto de Galinhas - Dia', rPe, 10], ['Muro Alto', rPe, 12.5], ['Maragogi - Dia', rPe, 8], ['Gramado - Dia', rRs, 15], ['Gramado - Noite', rRs, 10]]) {

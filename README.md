@@ -21,13 +21,13 @@ gav-autorizacoes-app/
 |---|---|
 | **Master** | Acesso total. Cadastra diretorias, regionais, salas, usuários e tipos de exceção. Vê o **Monitor**. |
 | **Diretoria** | Responde pela(s) diretoria(s) que o master apontar. Acompanha e aprova exceções de todas as salas delas. |
-| **Superintendente** | Responde pela(s) diretoria(s). Aprova exceções de todas as salas dela. |
+| **Superintendente** | Fica dentro de uma diretoria e responde pelas regionais que o master vincular. Aprova exceções das salas dessas regionais. |
 | **Regional** | Responde pela(s) regional(is). Aprova exceções das salas dela. |
 | **Gerente de Sala** | Vinculado a uma sala. Aprova as exceções da sala na alçada de gerente. |
 | **Consultor de Vendas** | Vinculado a uma sala. Cria as solicitações e acompanha as respostas. |
 | **Assistente de Contratos** | Vinculado a uma sala. **Não pede autorização**: recebe o retorno de toda decisão (aprovada ou negada) da sala, confere a autorização pelo código antes de finalizar o contrato e registra o desfecho (venda finalizada ou sem venda, com justificativa). |
 
-**Cadastro:** cada pessoa cria a própria conta em **Criar conta**, escolhendo a função. Consultores, gerentes e assistentes escolhem a sala na lista. O master aprova em **Usuários** e, para Regional, Superintendente e Diretoria, marca quais regionais ou diretorias ficam sob responsabilidade de cada um. A pessoa recebe um e-mail quando é aprovada.
+**Cadastro:** cada pessoa cria a própria conta em **Criar conta**, escolhendo a função. Consultores, gerentes e assistentes escolhem a sala na lista. O master aprova em **Usuários** e, para Regional, Superintendente e Diretoria, marca o que fica sob responsabilidade de cada um: diretorias para a Diretoria, regionais para Superintendente e Regional. A pessoa recebe um e-mail quando é aprovada.
 
 **WhatsApp (wa.me):** ao enviar uma solicitação, o app oferece um botão **Avisar no WhatsApp** para cada aprovador, com o resumo pronto (código, tipo, cliente, valor, sala, campos e justificativa). Quando o aprovador responde, aparece o botão para avisar o solicitante com o status e o comentário. O wa.me abre a conversa com a mensagem pronta e a pessoa só toca em **Enviar**; o envio 100% automático exigiria a API paga do WhatsApp Business. Por isso o celular é obrigatório no cadastro, e quem já tem conta pode atualizá-lo em **Meu perfil**.
 
@@ -83,7 +83,7 @@ gav-autorizacoes-app/
 
 1. Abra o site, entre com `MASTER_EMAIL` e a senha provisória, e crie sua senha.
 2. **Usuários:** cadastre primeiro os superintendentes e os regionais.
-3. **Estrutura:** crie a diretoria (escolha o superintendente), as regionais (escolha o regional) e as salas (defina o limite %).
+3. **Estrutura:** crie a diretoria, as regionais (escolha a diretoria, o superintendente e o regional de cada uma) e as salas (defina o limite %).
 4. **Usuários:** cadastre gerentes, assistentes de contratos e consultores, cada um com sua sala.
    - A cada usuário criado aparece a **senha provisória** e o botão **Copiar mensagem**, que já vem com endereço, e-mail e senha para enviar pelo WhatsApp.
 5. **Tipos de exceção:** revise os 5 tipos padrão, ajuste a alçada e os campos que o consultor precisa preencher.
