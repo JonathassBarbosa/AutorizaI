@@ -12,7 +12,7 @@
 // ============================================================================
 const CONFIG = {
   VERSAO: '1.2.0',
-  MASTER_EMAIL: 'seu-email@gmail.com',   // e-mail de login do usuário master
+  MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
   NOME_REMETENTE: 'GAV Autorizações',    // nome que aparece nos e-mails enviados
