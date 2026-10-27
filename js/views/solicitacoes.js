@@ -48,7 +48,7 @@ function criarLista(paraMim) {
         </div>
         <div class="card" style="margin-bottom:16px"><div class="card-corpo" style="display:flex;flex-direction:column;gap:12px">
           <div class="linha-campos" style="grid-template-columns:2fr 1fr ${salas.length > 1 ? '1fr' : ''};gap:12px">
-            <div class="busca">${icone('busca')}<input class="entrada" id="busca" placeholder="Cliente, CPF, código ou consultor" value="${filtros.busca}"></div>
+            <div class="busca">${icone('busca')}<input class="entrada" id="busca" placeholder="ID Casal, código ou consultor" value="${filtros.busca}"></div>
             <select class="entrada" id="f-mes"><option value="">Todos os meses</option>
               ${ultimosMeses(12).map(m => html`<option value="${m}" ${m === filtros.mes ? 'selected' : ''}>${nomeMes(m)}</option>`)}</select>
             ${salas.length > 1 ? html`<select class="entrada" id="f-sala"><option value="">Todas as salas</option>

@@ -133,6 +133,11 @@ export function ultimosMeses(qtd = 12) {
   }
   return l;
 }
+/** Como identificar o cliente: ID Casal da ficha de atendimento (pedidos antigos têm nome e CPF). */
+export const dadosCliente = s => s.id_casal
+  ? [['ID Casal', s.id_casal]]
+  : [['Cliente', s.cliente], ['CPF', s.cpf]];
+
 export function mascaraCpf(v) {
   const d = String(v).replace(/\D/g, '').slice(0, 11);
   return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
@@ -188,6 +193,7 @@ const ICONES = {
   lixo: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   raio: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   celular: '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>',
+  qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>',
   grafico: '<path d="M4 20V4M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/>',
 };
 export const icone = (nome, extra = '') => raw(`<svg class="i ${extra}" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nome] || ''}</svg>`);

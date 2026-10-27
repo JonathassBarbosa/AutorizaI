@@ -1,7 +1,8 @@
 import {
-  html, api, icone, ocupado, toast, dadosDoForm, mascaraCpf, cpfValido, mascaraMoeda, lerMoeda, vazio, ALCADAS,
+  html, api, icone, ocupado, toast, dadosDoForm, mascaraMoeda, lerMoeda, vazio, ALCADAS,
 } from '../core.js';
 import { processando } from '../marcas.js';
+import { lerIdCasal } from '../qrcode.js';
 
 const PERFIS_DE_SALA = ['gerente', 'assistente', 'consultor'];
 let dados = null;
@@ -34,10 +35,12 @@ export default {
             <select class="entrada" id="sala_id" name="sala_id" required><option value="">Selecione…</option>
             ${estrutura.salas.map(s => html`<option value="${s.id}">${s.nome}</option>`)}</select></div>` : ''}
           <div class="linha-campos">
-            <div class="campo"><label for="cliente">Nome do cliente</label>
-              <input class="entrada" id="cliente" name="cliente" autocomplete="off" required></div>
-            <div class="campo"><label for="cpf">CPF do cliente</label>
-              <input class="entrada" id="cpf" name="cpf" inputmode="numeric" placeholder="000.000.000-00" required></div>
+            <div class="campo"><label for="id_casal">ID Casal</label>
+              <div class="campo-com-botao">
+                <input class="entrada" id="id_casal" name="id_casal" inputmode="numeric" autocomplete="off" placeholder="Ex.: 1234567" required>
+                <button class="btn btn-claro" type="button" id="ler-qr" title="Ler o QR code da ficha de atendimento">${icone('qr')} Ler QR</button>
+              </div>
+              <small>Está na ficha de atendimento. Toque em “Ler QR” para capturar pela câmera.</small></div>
             <div class="campo"><label for="empreendimento">Empreendimento</label>
               <input class="entrada" id="empreendimento" name="empreendimento" list="lista-emp" autocomplete="off">
               <datalist id="lista-emp">${['SALINAS PARK RESORT', 'SALINAS BEACH RESORT', 'SALINAS MATRIZ', 'PORTO ALTO RESORT', 'GRAN GARDEN RESORT']
@@ -62,10 +65,15 @@ export default {
   montar(el, ctx) {
     const form = el.querySelector('#form-nova');
     if (!form) return;
-    const cpf = form.cpf;
+    const idCasal = form.id_casal;
     const valor = form.valor;
-    cpf.addEventListener('input', () => { cpf.value = mascaraCpf(cpf.value); cpf.classList.remove('invalida'); });
-    cpf.addEventListener('blur', () => cpf.classList.toggle('invalida', !!cpf.value && !cpfValido(cpf.value)));
+    idCasal.addEventListener('input', () => { idCasal.value = idCasal.value.replace(/\D/g, '').slice(0, 12); });
+    el.querySelector('#ler-qr').addEventListener('click', async () => {
+      const id = await lerIdCasal();
+      if (!id) return;
+      idCasal.value = id;
+      toast(`ID Casal ${id} capturado da ficha.`, 'ok');
+    });
     valor.addEventListener('input', () => { valor.value = mascaraMoeda(valor.value); });
 
     form.tipo_id.addEventListener('change', () => {
@@ -90,8 +98,7 @@ export default {
       const faltando = [];
       if (!d.tipo_id) faltando.push('tipo de exceção');
       if (form.sala_id && !d.sala_id) faltando.push('sala');
-      if (d.cliente.length < 3) faltando.push('nome do cliente');
-      if (!cpfValido(d.cpf)) faltando.push('CPF válido');
+      if (!/^\d{3,12}$/.test(d.id_casal)) faltando.push('ID Casal');
       Object.entries(campos).forEach(([k, v]) => { if (!v) faltando.push(k.toLowerCase()); });
       if (d.justificativa.length < 10) faltando.push('justificativa (mín. 10 caracteres)');
       if (faltando.length) return toast('Preencha: ' + faltando.join(', ') + '.', 'erro');

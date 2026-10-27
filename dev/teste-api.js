@@ -86,10 +86,10 @@ passo('permissões por perfil');
 const tipos = ok('tipos.listar', {}, tc);
 const tipoGer = tipos.find(t => t.alcada === 'gerente' && t.campos.length === 2);
 const tipoSup = tipos.find(t => t.alcada === 'superintendente');
-falha('solicitacoes.criar', { tipo_id: tipoGer.id, cliente: 'João', cpf: '111.111.111-11', justificativa: 'x'.repeat(12) }, tc);
+falha('solicitacoes.criar', { tipo_id: tipoGer.id, id_casal: 'abc', justificativa: 'x'.repeat(12) }, tc);
 const campos = {}; tipoGer.campos.forEach(c => { campos[c] = '7x'; });
 const s1 = ok('solicitacoes.criar', {
-  tipo_id: tipoGer.id, cliente: 'João da Silva', cpf: '529.982.247-25', empreendimento: 'SALINAS PARK', valor: 120000,
+  tipo_id: tipoGer.id, id_casal: '1234538', empreendimento: 'SALINAS PARK', valor: 120000,
   campos, justificativa: 'Cliente investidor, fecha hoje se parcelar a entrada.',
 }, tc);
 assert.strictEqual(s1.status, 'pendente');
@@ -118,7 +118,7 @@ passo('assistente verifica pelo código e registra a venda finalizada');
 
 // --- alçada do superintendente + negativa + perda
 const s2 = ok('solicitacoes.criar', {
-  tipo_id: tipoSup.id, cliente: 'Maria Souza', cpf: '15350946056', valor: 90000,
+  tipo_id: tipoSup.id, id_casal: '1234539', valor: 90000,
   campos: Object.fromEntries(tipoSup.campos.map(c => [c, 'Condição X'])), justificativa: 'Pedido especial do cliente com histórico.',
 }, tc);
 assert.strictEqual(s2.alcada, 'superintendente');
@@ -133,7 +133,7 @@ passo('alçada de superintendente respeitada; negativa e perda com justificativa
 const mes = ok('dashboard.obter', {}, tm).mes;
 ok('vendas.salvar', { sala_id: sala.id, mes, total_vendas: 10 }, ta);
 const s3 = ok('solicitacoes.criar', {
-  tipo_id: tipoGer.id, cliente: 'Pedro Lima', cpf: '86288366757', campos, justificativa: 'Mais uma condição especial.',
+  tipo_id: tipoGer.id, id_casal: '1234540', campos, justificativa: 'Mais uma condição especial.',
 }, tc);
 assert.strictEqual(s3.alcada, 'regional', 'sala em 10% com limite 10% deve subir para regional');
 assert.match(s3.alcada_motivo, /Elevada/);
@@ -201,7 +201,7 @@ passo('diretoria: só enxerga as diretorias que o master vinculou');
 
 // --- assistente recebe retorno também das negativas
 const antes = ok('notificacoes.listar', {}, ta).nao_lidas;
-const s4 = ok('solicitacoes.criar', { tipo_id: tipoGer.id, cliente: 'Lia Souza', cpf: '11144477735', campos, justificativa: 'Mais uma exceção de teste.' }, tc);
+const s4 = ok('solicitacoes.criar', { tipo_id: tipoGer.id, id_casal: '1234541', campos, justificativa: 'Mais uma exceção de teste.' }, tc);
 ok('solicitacoes.responder', { id: s4.id, decisao: 'negada', resposta: 'Fora da política, sem exceção.' }, tr);
 assert.strictEqual(ok('notificacoes.listar', {}, ta).nao_lidas, antes + 1);
 passo('assistente de contratos recebe o retorno de aprovadas e negadas');
@@ -228,7 +228,7 @@ falha('cadastro.solicitar', { nome: 'Fulano', email: 'umnome@gav.dev', perfil: '
 ok('auth.atualizarTelefone', { telefone: '(81) 98765-4321' }, tg);
 falha('auth.atualizarTelefone', { telefone: '999' }, tg);
 ok('auth.atualizarTelefone', { telefone: '81 91111-2222' }, tc);
-const s5 = ok('solicitacoes.criar', { tipo_id: tipoGer.id, cliente: 'Caio Prado', cpf: '39053344705', campos, justificativa: 'Teste do aviso por WhatsApp.' }, tc);
+const s5 = ok('solicitacoes.criar', { tipo_id: tipoGer.id, id_casal: '1234542', campos, justificativa: 'Teste do aviso por WhatsApp.' }, tc);
 // a sala está acima do limite do mês, então a alçada sobe para o regional
 assert.strictEqual(s5.alcada, 'regional');
 assert.deepStrictEqual(s5.aguardando.map(a => a.whatsapp), [''], 'regional ainda sem celular');
@@ -236,6 +236,9 @@ ok('auth.atualizarTelefone', { telefone: '(81) 97777-6666' }, tr);
 assert.strictEqual(ok('solicitacoes.obter', { id: s5.id }, tc).aguardando[0].whatsapp, '5581977776666');
 const r5 = ok('solicitacoes.responder', { id: s5.id, decisao: 'aprovada', resposta: 'Pode seguir.' }, tr);
 assert.strictEqual(r5.consultor_whatsapp, '5581911112222');
+assert.strictEqual(s5.cliente, 'ID Casal 1234542');
+assert.strictEqual(ok('solicitacoes.listar', { busca: '1234542' }, tc).total, 1);
+passo('ID Casal: identifica o cliente (sem nome e CPF) e entra na busca');
 passo('WhatsApp: celular obrigatório no cadastro; aprovador e solicitante com número no formato wa.me');
 
 console.info('\nTodos os testes passaram.');

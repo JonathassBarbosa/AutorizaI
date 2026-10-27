@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.4.0',
+  VERSAO: '1.5.0',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -50,7 +50,7 @@ const ABAS = {
   Solicitacoes: ['id', 'codigo', 'tipo_id', 'tipo_nome', 'sala_id', 'consultor_id', 'consultor_nome', 'cliente', 'cpf',
     'empreendimento', 'valor', 'campos', 'justificativa', 'status', 'alcada', 'alcada_motivo', 'aprovador_id',
     'aprovador_nome', 'resposta', 'respondido_em', 'desfecho', 'contrato', 'desfecho_justificativa', 'desfecho_por',
-    'desfecho_em', 'criado_em', 'atualizado_em'],
+    'desfecho_em', 'criado_em', 'atualizado_em', 'id_casal'],
   VendasMes: ['id', 'sala_id', 'mes', 'total_vendas', 'atualizado_por', 'atualizado_em'],
   Notificacoes: ['id', 'usuario_id', 'titulo', 'mensagem', 'link', 'lida', 'criado_em'],
   Sessoes: ['token_hash', 'usuario_id', 'criado_em', 'expira_em', 'ativo'],
@@ -612,7 +612,7 @@ function listarSolicitacoes_(d, u) {
     const b = normalizar_(d.busca);
     const digitos = String(d.busca).replace(/\D/g, '');
     l = l.filter(s => normalizar_([s.codigo, s.cliente, s.consultor_nome, s.tipo_nome, s.empreendimento].join(' ')).indexOf(b) >= 0
-      || (digitos.length >= 3 && s.cpf.replace(/\D/g, '').indexOf(digitos) >= 0));
+      || (digitos.length >= 3 && (s.cpf.replace(/\D/g, '') + ' ' + s.id_casal).indexOf(digitos) >= 0));
   }
   l.sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1));
   return { total: l.length, itens: l.slice(0, Number(d.limite) || 300).map(s => solicitacaoPublica_(s, u)) };
@@ -650,8 +650,10 @@ function criarSolicitacao_(d, u) {
   const sala = estrutura_().sala[salaId];
   if (!sala || !bool_(sala.ativo)) throw falha_('Seu usuário não está vinculado a uma sala de vendas ativa. Fale com o master.');
 
-  const cliente = texto_(d.cliente, 'Nome do cliente', 3, 120);
-  if (!cpfValido_(d.cpf)) throw falha_('CPF inválido. Confira os números.');
+  // O cliente é identificado pelo ID Casal da ficha de atendimento (sem nome nem CPF).
+  const idCasal = String(d.id_casal || '').replace(/\D/g, '');
+  if (!/^\d{3,12}$/.test(idCasal)) throw falha_('Informe o ID Casal da ficha de atendimento (só números).');
+  const cliente = 'ID Casal ' + idCasal;
   const valor = d.valor === '' || d.valor === null || d.valor === undefined ? '' : Number(d.valor);
   if (valor !== '' && (isNaN(valor) || valor < 0)) throw falha_('Valor da venda inválido.');
   const justificativa = texto_(d.justificativa, 'Justificativa', 10, 2000);
@@ -667,7 +669,7 @@ function criarSolicitacao_(d, u) {
   const codigo = 'GAV-' + ('00000' + seq).slice(-6) + '-' + sha_(id).slice(0, 4).toUpperCase();
   const s = inserir_('Solicitacoes', {
     id: id, codigo: codigo, tipo_id: tipo.id, tipo_nome: tipo.nome, sala_id: salaId,
-    consultor_id: u.id, consultor_nome: u.nome, cliente: cliente, cpf: formatarCpf_(d.cpf),
+    consultor_id: u.id, consultor_nome: u.nome, cliente: cliente, cpf: '', id_casal: idCasal,
     empreendimento: String(d.empreendimento || '').trim().slice(0, 120), valor: valor,
     campos: JSON.stringify(campos), justificativa: justificativa, status: 'pendente',
     alcada: alc.alcada, alcada_motivo: alc.motivo, criado_em: agora_(), atualizado_em: agora_(),

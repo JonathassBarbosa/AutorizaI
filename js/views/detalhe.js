@@ -1,6 +1,6 @@
 import {
   html, api, icone, seloStatus, seloDesfecho, moeda, dataHora, relativo, ocupado, toast, confirmar, dadosDoForm,
-  ALCADAS, PERFIS,
+  ALCADAS, PERFIS, dadosCliente,
 } from '../core.js';
 import { logoSvg, processando } from '../marcas.js';
 import { botaoWhats, modalWhats, textoPedido, textoResposta, ICONE_WHATS } from '../whatsapp.js';
@@ -13,7 +13,7 @@ let atual = null;
 
 function documentoImpressao(s) {
   const linhas = [
-    ['Código de verificação', s.codigo], ['Tipo de exceção', s.tipo_nome], ['Cliente', s.cliente], ['CPF', s.cpf],
+    ['Código de verificação', s.codigo], ['Tipo de exceção', s.tipo_nome], ...dadosCliente(s),
     ['Empreendimento', s.empreendimento || '—'], ['Valor da venda', moeda(s.valor)],
     ...Object.entries(s.campos || {}),
     ['Justificativa', s.justificativa], ['Sala de vendas', s.sala_nome], ['Regional / Diretoria', `${s.regional_nome || '—'} / ${s.diretoria_nome || '—'}`],
@@ -85,8 +85,7 @@ export default {
             <div class="card-topo"><h3>Dados da negociação</h3></div>
             <div class="card-corpo">
               <dl class="dados">
-                <div><dt>Cliente</dt><dd>${s.cliente}</dd></div>
-                <div><dt>CPF</dt><dd>${s.cpf}</dd></div>
+                ${dadosCliente(s).map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}
                 <div><dt>Empreendimento</dt><dd>${s.empreendimento || '—'}</dd></div>
                 <div><dt>Valor da venda</dt><dd>${moeda(s.valor)}</dd></div>
                 ${campos.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}

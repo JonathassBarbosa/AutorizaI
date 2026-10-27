@@ -1,4 +1,4 @@
-import { html, api, icone, seloStatus, seloDesfecho, dataHora, moeda, ALCADAS } from '../core.js';
+import { html, api, icone, seloStatus, seloDesfecho, dataHora, moeda, ALCADAS, dadosCliente } from '../core.js';
 import { processando } from '../marcas.js';
 
 function resultado(s) {
@@ -14,7 +14,7 @@ function resultado(s) {
     <div class="card"><div class="card-topo"><div><div class="codigo" style="font-family:monospace;color:var(--muted)">${s.codigo}</div>
       <h3 style="font-size:18px">${s.cliente}</h3></div><div style="display:flex;gap:6px">${seloStatus(s.status)}${seloDesfecho(s.desfecho)}</div></div>
       <div class="card-corpo"><dl class="dados">
-        <div><dt>CPF</dt><dd>${s.cpf}</dd></div>
+        ${dadosCliente(s).slice(1).map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}
         <div><dt>Tipo</dt><dd>${s.tipo_nome}</dd></div>
         <div><dt>Valor</dt><dd>${moeda(s.valor)}</dd></div>
         <div><dt>Sala</dt><dd>${s.sala_nome}</dd></div>

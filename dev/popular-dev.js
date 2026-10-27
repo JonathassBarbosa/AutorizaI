@@ -67,7 +67,7 @@ async function chamar(action, data, token) {
     const [quem, t, cliente, valor, vals, acao, aprovador] = pedidos[i];
     const tp = tipo(t);
     const s = await chamar('solicitacoes.criar', {
-      tipo_id: tp.id, cliente, cpf: cpfs[i], empreendimento: 'SALINAS PARK RESORT', valor, campos: campos(tp, vals),
+      tipo_id: tp.id, id_casal: String(1234567 + i), empreendimento: 'SALINAS PARK RESORT', valor, campos: campos(tp, vals),
       justificativa: 'Cliente decidido a fechar hoje, condição necessária para concluir a venda.',
     }, tokens[quem]);
     if (acao) {
