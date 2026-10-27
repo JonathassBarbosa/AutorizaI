@@ -123,6 +123,7 @@ function criarServicos(estado) {
     Logger: { log: (...a) => console.log('[Logger]', ...a) },
     Session: { getScriptTimeZone: () => 'America/Sao_Paulo', getEffectiveUser: () => ({ getEmail: () => 'master@gav.dev' }) },
     MailApp: {
+      getRemainingDailyQuota: () => 100,
       sendEmail: msg => {
         (estado.emails = estado.emails || []).push({ to: msg.to, subject: msg.subject, data: new Date().toISOString() });
         console.log('[e-mail simulado] para ' + msg.to + ': ' + msg.subject);

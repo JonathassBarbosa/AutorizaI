@@ -1164,9 +1164,20 @@ function enviarEmail_(para, assunto, titulo, corpoHtml, textoBotao, linkBotao) {
 /** Rode no editor para testar o envio de e-mails (e autorizar a permissão de e-mail). */
 function testarEmail() {
   MEMO_ = {};
-  const destino = Session.getEffectiveUser().getEmail() || CONFIG.MASTER_EMAIL;
-  const ok = enviarEmail_(destino, 'Teste de e-mail — GAV Autorizações', 'Tudo certo!', '<p>O envio de e-mails do sistema está funcionando.</p>', '', '');
-  Logger.log(ok ? '✅ E-mail de teste enviado para ' + destino : '❌ Falhou — veja a aba Logs.');
+  const dono = Session.getEffectiveUser().getEmail();
+  Logger.log('Conta dona do script (remetente dos e-mails): ' + (dono || 'não identificada'));
+  Logger.log('Cota de e-mails restante hoje: ' + MailApp.getRemainingDailyQuota());
+  const destinos = [CONFIG.MASTER_EMAIL, dono].filter((e, i, a) => e && !/seu-email/.test(e) && a.indexOf(e) === i);
+  if (!destinos.length) { Logger.log('❌ Preencha CONFIG.MASTER_EMAIL com o seu e-mail.'); return; }
+  destinos.forEach(destino => {
+    try {
+      MailApp.sendEmail({ to: destino, subject: 'Teste de e-mail — GAV Autorizações', name: CONFIG.NOME_REMETENTE,
+        htmlBody: '<p>O envio de e-mails do sistema GAV Autorizações está funcionando.</p><p>Remetente: ' + esc_(dono) + '</p>' });
+      Logger.log('✅ Enviado para ' + destino + ' (confira também a caixa de spam)');
+    } catch (e) {
+      Logger.log('❌ Falhou para ' + destino + ': ' + e.message);
+    }
+  });
 }
 
 // ============================================================================
