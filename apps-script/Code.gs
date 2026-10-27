@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.1.0',
+  VERSAO: '1.2.0',
   MASTER_EMAIL: 'seu-email@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -80,6 +80,7 @@ const ROTAS = {
   'auth.logout': { escrita: true, trocaPendente: true, fn: logout_ },
   'auth.eu': { silenciosa: true, trocaPendente: true, fn: (d, u) => perfilPublico_(u) },
   'auth.trocarSenha': { escrita: true, trocaPendente: true, fn: trocarSenha_ },
+  'auth.atualizarTelefone': { escrita: true, fn: atualizarTelefone_ },
 
   'dashboard.obter': { fn: dashboard_ },
   'vendas.salvar': { escrita: true, perfis: ['assistente', 'gerente', 'regional', 'superintendente', 'master'], fn: salvarVendasMes_ },
@@ -349,6 +350,17 @@ function cpfValido_(cpf) {
   return true;
 }
 
+/** Celular brasileiro no formato do wa.me (55 + DDD + número) ou '' se inválido. */
+function telefoneWa_(t) {
+  let d = String(t || '').replace(/\D/g, '');
+  if (d.length === 10 || d.length === 11) d = '55' + d;
+  return /^55[1-9]\d{9,10}$/.test(d) ? d : '';
+}
+
+function contatoWhatsApp_(u) {
+  return { nome: u.nome, perfil: u.perfil, whatsapp: telefoneWa_(u.telefone) };
+}
+
 function formatarCpf_(cpf) {
   const c = String(cpf).replace(/\D/g, '');
   return c.slice(0, 3) + '.' + c.slice(3, 6) + '.' + c.slice(6, 9) + '-' + c.slice(9);
@@ -431,6 +443,12 @@ function trocarSenha_(d, u) {
   const atual = buscar_('Usuarios', u.id);
   const novo = atualizar_('Usuarios', atual, { senha_hash: hashSenha_(nova, salt), salt: salt, trocar_senha: 'false' });
   auditar_(u, 'trocar_senha', 'usuario', u.id, '');
+  return perfilPublico_(novo);
+}
+
+function atualizarTelefone_(d, u) {
+  if (!telefoneWa_(d.telefone)) throw falha_('Informe um celular com DDD, por exemplo (81) 99999-9999.');
+  const novo = atualizar_('Usuarios', buscar_('Usuarios', u.id), { telefone: String(d.telefone).trim().slice(0, 30) });
   return perfilPublico_(novo);
 }
 
@@ -609,8 +627,10 @@ function obterSolicitacao_(d, u) {
     && ['assistente', 'gerente', 'regional', 'superintendente', 'master'].indexOf(u.perfil) >= 0
     && (u.perfil === 'master' || podeVerSala_(u, s.sala_id));
   o.aguardando = s.status === 'pendente'
-    ? destinatariosDaAlcada_(s.sala_id, s.alcada).map(x => ({ nome: x.nome, perfil: x.perfil }))
+    ? destinatariosDaAlcada_(s.sala_id, s.alcada).filter(x => x.id !== s.consultor_id).map(contatoWhatsApp_)
     : [];
+  const solicitante = buscar_('Usuarios', s.consultor_id);
+  o.consultor_whatsapp = solicitante ? telefoneWa_(solicitante.telefone) : '';
   o.historico = ler_('Auditoria')
     .filter(a => a.entidade === 'solicitacao' && a.entidade_id === s.id)
     .map(a => ({ data: a.data, usuario: a.usuario_nome, acao: a.acao, detalhes: a.detalhes }));
@@ -654,7 +674,9 @@ function criarSolicitacao_(d, u) {
   const destinos = destinatariosDaAlcada_(salaId, alc.alcada).filter(x => x.id !== u.id);
   notificar_(destinos.map(x => x.id), 'Nova exceção para aprovar',
     tipo.nome + ' — ' + cliente + ' (' + sala.nome + ')', '#/solicitacao/' + s.id);
-  return solicitacaoPublica_(s, u);
+  const saida = solicitacaoPublica_(s, u);
+  saida.aguardando = destinos.map(contatoWhatsApp_); // o app monta o aviso por WhatsApp (wa.me)
+  return saida;
 }
 
 function responderSolicitacao_(d, u) {
@@ -678,7 +700,10 @@ function responderSolicitacao_(d, u) {
   notificar_(assistentes.map(x => x.id),
     decisao === 'aprovada' ? 'Autorização liberada ✅' : 'Exceção negada ❌',
     s.codigo + ' — ' + s.cliente + (decisao === 'aprovada' ? ' pode seguir para contrato' : ' · venda só dentro da regra'), link);
-  return solicitacaoPublica_(novo, u);
+  const saida = solicitacaoPublica_(novo, u);
+  const solicitante = buscar_('Usuarios', s.consultor_id);
+  saida.consultor_whatsapp = solicitante ? telefoneWa_(solicitante.telefone) : '';
+  return saida;
 }
 
 function cancelarSolicitacao_(d, u) {
@@ -908,6 +933,7 @@ function salvarUsuario_(d, u) {
     if (!estrutura_().sala[d.sala_id]) throw falha_('Selecione a sala de vendas deste usuário.');
     salaId = d.sala_id;
   }
+  if (d.telefone && !telefoneWa_(d.telefone)) throw falha_('Celular inválido. Use DDD + número, por exemplo (81) 99999-9999.');
   const ativo = boolTxt_(d.ativo);
   const dados = { nome: nome, email: email, telefone: String(d.telefone || '').trim().slice(0, 30), perfil: perfil, sala_id: salaId, ativo: ativo };
   let registro;
@@ -983,10 +1009,12 @@ function solicitarCadastro_(d) {
   const n = Number(cache.get(chave) || 0);
   if (n >= 30) throw falha_('Muitos cadastros em pouco tempo. Tente novamente mais tarde.', 'LIMITE');
   const nome = texto_(d.nome, 'Nome completo', 5, 120);
+  if (nome.split(/\s+/).length < 2) throw falha_('Informe o nome completo (nome e sobrenome).');
   const email = String(d.email || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw falha_('E-mail inválido.');
   const perfil = String(d.perfil || '');
   if (PERFIS_AUTOCADASTRO.indexOf(perfil) < 0) throw falha_('Selecione a função que você ocupa.');
+  if (!telefoneWa_(d.telefone)) throw falha_('Informe seu celular com DDD e WhatsApp, por exemplo (81) 99999-9999.');
   const existente = ler_('Usuarios').find(x => x.email.toLowerCase() === email);
   if (existente) {
     throw falha_(existente.cadastro === 'pendente'

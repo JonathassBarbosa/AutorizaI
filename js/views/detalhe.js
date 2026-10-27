@@ -3,6 +3,11 @@ import {
   ALCADAS, PERFIS,
 } from '../core.js';
 import { logoSvg, processando } from '../marcas.js';
+import { botaoWhats, modalWhats, textoPedido, textoResposta, ICONE_WHATS } from '../whatsapp.js';
+
+const contatoSolicitante = s => ({ nome: s.consultor_nome, perfil: '', whatsapp: s.consultor_whatsapp });
+const podeAvisarAprovador = (s, u) => s.status === 'pendente' && (s.consultor_id === u.id || u.perfil === 'master');
+const podeAvisarSolicitante = (s, u) => ['aprovada', 'negada'].includes(s.status) && (s.aprovador_id === u.id || u.perfil === 'master');
 
 let atual = null;
 
@@ -31,6 +36,7 @@ export default {
   async render(ctx) {
     const s = await api('solicitacoes.obter', { id: ctx.rota.params[0] });
     atual = s;
+    const u = ctx.usuario;
     const campos = Object.entries(s.campos || {});
     return html`
       <div class="cabecalho" style="margin-bottom:12px">
@@ -117,6 +123,11 @@ export default {
         </div>
 
         <div class="grade">
+          ${podeAvisarAprovador(s, u) ? html`<div class="card"><div class="card-topo"><h3 style="display:flex;gap:8px;align-items:center">${ICONE_WHATS} Avisar quem aprova</h3></div>
+            <div class="card-corpo" style="display:flex;flex-direction:column;gap:10px">
+              ${s.aguardando.length ? s.aguardando.map(a => botaoWhats(a, textoPedido(s, a))) : html`<span class="secundario">Nenhum aprovador cadastrado para esta sala.</span>`}</div></div>` : ''}
+          ${podeAvisarSolicitante(s, u) ? html`<div class="card"><div class="card-topo"><h3 style="display:flex;gap:8px;align-items:center">${ICONE_WHATS} Avisar o solicitante</h3></div>
+            <div class="card-corpo">${botaoWhats(contatoSolicitante(s), textoResposta(s), `Enviar status para ${s.consultor_nome.split(' ')[0]}`)}</div></div>` : ''}
           <div class="card"><div class="card-topo"><h3>Origem</h3></div><div class="card-corpo">
             <dl class="dados" style="grid-template-columns:1fr">
               <div><dt>Consultor</dt><dd>${s.consultor_nome}</dd></div>
@@ -146,6 +157,26 @@ export default {
     }
     el.querySelector('#imprimir')?.addEventListener('click', () => window.print());
 
+    // Aviso por WhatsApp logo depois de criar (consultor) ou de responder (aprovador)
+    if (ctx.rota.query.get('avisar') === '1') {
+      history.replaceState(null, '', `#/solicitacao/${s.id}`);
+      if (podeAvisarAprovador(s, ctx.usuario) && s.aguardando.length) {
+        modalWhats({
+          titulo: 'Avise quem vai aprovar',
+          descricao: 'Sua solicitação foi enviada. Mande o resumo pelo WhatsApp para agilizar a resposta:',
+          contatos: s.aguardando,
+          texto: a => textoPedido(s, a),
+        });
+      } else if (podeAvisarSolicitante(s, ctx.usuario)) {
+        modalWhats({
+          titulo: `Avise ${s.consultor_nome.split(' ')[0]}`,
+          descricao: `Mande o status (${s.status === 'aprovada' ? 'aprovada ✅' : 'negada ❌'}) para o solicitante pelo WhatsApp:`,
+          contatos: [contatoSolicitante(s)],
+          texto: () => textoResposta(s),
+        });
+      }
+    }
+
     const fd = el.querySelector('#form-decisao');
     fd?.addEventListener('submit', async ev => {
       ev.preventDefault();
@@ -157,7 +188,7 @@ export default {
         await processando(decisao === 'aprovada' ? 'Registrando aprovação…' : 'Registrando negativa…', () => api('solicitacoes.responder', { id: s.id, decisao, resposta }));
         toast(decisao === 'aprovada' ? 'Exceção aprovada. O consultor foi avisado.' : 'Exceção negada. O consultor foi avisado.', 'ok');
         ctx.atualizarNotificacoes(true);
-        recarregar();
+        ctx.ir(`solicitacao/${s.id}?avisar=1&t=${Date.now()}`);
       } catch (e) { toast(e.message, 'erro'); }
     });
 

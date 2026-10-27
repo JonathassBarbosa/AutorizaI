@@ -171,8 +171,8 @@ assert.ok(opc.salas.some(x => x.nome === 'Porto de Galinhas - Dia'));
 const salaGunga = opc.salas.find(x => x.nome === 'Gunga');
 falha('cadastro.solicitar', { nome: 'Teste Sem Sala', email: 'semsala@gav.dev', perfil: 'consultor', senha: 'Senha1234' });
 falha('cadastro.solicitar', { nome: 'Teste Master', email: 'm2@gav.dev', perfil: 'master', senha: 'Senha1234' });
-ok('cadastro.solicitar', { nome: 'Paula Pereira', email: 'paula@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, senha: 'Paula1234' });
-falha('cadastro.solicitar', { nome: 'Paula Pereira', email: 'paula@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, senha: 'Paula1234' });
+ok('cadastro.solicitar', { nome: 'Paula Pereira', email: 'paula@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, telefone: '(82) 99876-5432', senha: 'Paula1234' });
+falha('cadastro.solicitar', { nome: 'Paula Pereira', email: 'paula@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, telefone: '(82) 99876-5432', senha: 'Paula1234' });
 falha('auth.login', { email: 'paula@gav.dev', senha: 'Paula1234' }, null, 'CADASTRO_PENDENTE');
 assert.strictEqual(ok('notificacoes.listar', {}, tm).cadastros_pendentes, 1);
 assert.ok(estado.emails.some(e => e.to === 'master@gav.dev' && /aguardando/.test(e.subject)));
@@ -182,13 +182,13 @@ ok('usuarios.aprovarCadastro', { id: paula.id }, tm);
 assert.ok(estado.emails.some(e => e.to === 'paula@gav.dev' && /liberado/.test(e.subject)));
 const tp = ok('auth.login', { email: 'paula@gav.dev', senha: 'Paula1234' }).token;
 assert.strictEqual(ok('auth.eu', {}, tp).sala_nome, 'Gunga');
-ok('cadastro.solicitar', { nome: 'Rui Recusado', email: 'rui@gav.dev', perfil: 'gerente', sala_id: salaGunga.id, senha: 'Rui12345' });
+ok('cadastro.solicitar', { nome: 'Rui Recusado', email: 'rui@gav.dev', perfil: 'gerente', sala_id: salaGunga.id, telefone: '82998765400', senha: 'Rui12345' });
 ok('usuarios.recusarCadastro', { id: ok('usuarios.listar', {}, tm).find(x => x.email === 'rui@gav.dev').id, motivo: 'Não faz parte da equipe' }, tm);
 falha('auth.login', { email: 'rui@gav.dev', senha: 'Rui12345' }, null, 'CADASTRO_RECUSADO');
 passo('autocadastro: escolhe função e sala, entra só depois da aprovação do master (e-mails enviados)');
 
 // --- diretoria: o master aponta as diretorias na aprovação
-ok('cadastro.solicitar', { nome: 'Diana Diretora', email: 'diana@gav.dev', perfil: 'diretor', senha: 'Diana1234' });
+ok('cadastro.solicitar', { nome: 'Diana Diretora', email: 'diana@gav.dev', perfil: 'diretor', telefone: '(11) 91234-5678', senha: 'Diana1234' });
 const diana = ok('usuarios.listar', {}, tm).find(x => x.email === 'diana@gav.dev');
 falha('usuarios.aprovarCadastro', { id: diana.id }, tm);
 ok('usuarios.aprovarCadastro', { id: diana.id, vinculo_ids: [dir.id] }, tm);
@@ -218,5 +218,22 @@ falha('dashboard.obter', {}, tp, 'SESSAO');
 ok('auth.login', { email: 'paula@gav.dev', senha: 'NovaPaula1' });
 falha('auth.redefinirComCodigo', { email: 'paula@gav.dev', codigo: codigoEmail, nova_senha: 'Outra1234' }, null, 'CODIGO');
 passo('recuperação de senha: código por e-mail, uso único, derruba sessões antigas');
+
+
+// --- WhatsApp (wa.me): contatos para avisar aprovador e solicitante
+falha('cadastro.solicitar', { nome: 'Sem Celular', email: 'semcel@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, telefone: '1234', senha: 'Senha1234' });
+falha('cadastro.solicitar', { nome: 'Fulano', email: 'umnome@gav.dev', perfil: 'consultor', sala_id: salaGunga.id, telefone: '(82) 99999-0000', senha: 'Senha1234' });
+ok('auth.atualizarTelefone', { telefone: '(81) 98765-4321' }, tg);
+falha('auth.atualizarTelefone', { telefone: '999' }, tg);
+ok('auth.atualizarTelefone', { telefone: '81 91111-2222' }, tc);
+const s5 = ok('solicitacoes.criar', { tipo_id: tipoGer.id, cliente: 'Caio Prado', cpf: '39053344705', campos, justificativa: 'Teste do aviso por WhatsApp.' }, tc);
+// a sala está acima do limite do mês, então a alçada sobe para o regional
+assert.strictEqual(s5.alcada, 'regional');
+assert.deepStrictEqual(s5.aguardando.map(a => a.whatsapp), [''], 'regional ainda sem celular');
+ok('auth.atualizarTelefone', { telefone: '(81) 97777-6666' }, tr);
+assert.strictEqual(ok('solicitacoes.obter', { id: s5.id }, tc).aguardando[0].whatsapp, '5581977776666');
+const r5 = ok('solicitacoes.responder', { id: s5.id, decisao: 'aprovada', resposta: 'Pode seguir.' }, tr);
+assert.strictEqual(r5.consultor_whatsapp, '5581911112222');
+passo('WhatsApp: celular obrigatório no cadastro; aprovador e solicitante com número no formato wa.me');
 
 console.info('\nTodos os testes passaram.');

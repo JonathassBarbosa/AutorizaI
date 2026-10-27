@@ -29,6 +29,8 @@ gav-autorizacoes-app/
 
 **Cadastro:** cada pessoa cria a própria conta em **Criar conta**, escolhendo a função. Consultores, gerentes e assistentes escolhem a sala na lista. O master aprova em **Usuários** e, para Regional, Superintendente e Diretoria, marca quais regionais ou diretorias ficam sob responsabilidade de cada um. A pessoa recebe um e-mail quando é aprovada.
 
+**WhatsApp (wa.me):** ao enviar uma solicitação, o app oferece um botão **Avisar no WhatsApp** para cada aprovador, com o resumo pronto (código, tipo, cliente, valor, sala, campos e justificativa). Quando o aprovador responde, aparece o botão para avisar o solicitante com o status e o comentário. O wa.me abre a conversa com a mensagem pronta e a pessoa só toca em **Enviar**; o envio 100% automático exigiria a API paga do WhatsApp Business. Por isso o celular é obrigatório no cadastro, e quem já tem conta pode atualizá-lo em **Meu perfil**.
+
 **Senha esquecida:** em **Esqueci minha senha**, a pessoa recebe por e-mail um código de 6 dígitos, válido por 15 minutos.
 
 **Alçadas:** cada tipo de exceção define o nível mínimo (gerente, regional ou superintendente). Níveis acima também podem aprovar. Se o cargo estiver vago na sala, o pedido sobe automaticamente. Se a sala passar do **limite % de exceções do mês**, as novas exceções sobem um nível.
@@ -112,6 +114,10 @@ Sem o OneSignal, os avisos aparecem só no sino dentro do app. Com ele, chegam c
 3. Para conferir o e-mail, rode **`testarEmail`**: chega uma mensagem de teste na sua caixa.
 4. **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar.**
 5. Em **Estrutura**, vincule cada sala à sua regional (as salas novas aparecem em "Salas sem regional").
+
+## Atualizando para a versão 1.2 (WhatsApp)
+
+Cole o novo `apps-script/Code.gs`, mantenha o seu e-mail em `MASTER_EMAIL`, salve e publique uma **nova versão** (Implantar → Gerenciar implantações → ✏️ → Nova versão). Não é preciso rodar o `setup` de novo.
 
 ## Monitor (perfil master)
 

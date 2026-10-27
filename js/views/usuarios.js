@@ -1,4 +1,5 @@
 import { html, api, icone, iniciais, modal, ocupado, toast, confirmar, dadosDoForm, relativo, vazio, PERFIS } from '../core.js';
+import { mascaraCelular } from '../whatsapp.js';
 
 let usuarios = [];
 let est = null;
@@ -88,7 +89,7 @@ export default {
           <div class="linha-campos">
             <div class="campo"><label>Nome completo</label><input class="entrada" name="nome" value="${u.nome || ''}" required></div>
             <div class="campo"><label>E-mail (login)</label><input class="entrada" name="email" type="email" value="${u.email || ''}" required></div>
-            <div class="campo"><label>Telefone</label><input class="entrada" name="telefone" type="tel" value="${u.telefone || ''}"></div>
+            <div class="campo"><label>Celular com WhatsApp</label><input class="entrada" name="telefone" type="tel" inputmode="numeric" placeholder="(81) 99999-9999" value="${mascaraCelular(u.telefone)}"></div>
             <div class="campo"><label>Perfil</label><select class="entrada" name="perfil" required>
               ${Object.entries(PERFIS).map(([k, v]) => html`<option value="${k}" ${(u.perfil || 'consultor') === k ? 'selected' : ''}>${v}</option>`)}</select></div>
           </div>
@@ -99,6 +100,7 @@ export default {
           <button class="btn btn-claro" data-fechar>Cancelar</button><button class="btn btn-primario" type="submit" form="form-u">Salvar</button>`,
       });
       const form = m.el.querySelector('#form-u');
+      form.telefone.addEventListener('input', () => { form.telefone.value = mascaraCelular(form.telefone.value); });
       const caixaVinculo = m.el.querySelector('#vinculo');
       const desenharVinculo = () => {
         const p = form.perfil.value;

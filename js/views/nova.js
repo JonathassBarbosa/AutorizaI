@@ -100,7 +100,7 @@ export default {
           ...d, valor: lerMoeda(d.valor), campos,
         }));
         toast(`Solicitação ${s.codigo} enviada para aprovação.`, 'ok');
-        ctx.ir('solicitacao/' + s.id);
+        ctx.ir(`solicitacao/${s.id}?avisar=1`); // abre o aviso por WhatsApp para quem aprova
       } catch (e) { toast(e.message, 'erro'); }
     });
   },

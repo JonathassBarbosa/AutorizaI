@@ -1,5 +1,6 @@
 import { html, api, icone, dadosDoForm, PERFIS } from '../core.js';
 import { assinatura, processando } from '../marcas.js';
+import { mascaraCelular, celularValido } from '../whatsapp.js';
 
 const PERFIS_DE_SALA = ['consultor', 'gerente', 'assistente'];
 const AJUDA = {
@@ -43,10 +44,6 @@ export default {
               <div id="erro-cadastro"></div>
               <div class="campo"><label for="nome">Nome completo</label>
                 <input class="entrada" id="nome" name="nome" autocomplete="name" required></div>
-              <div class="campo"><label for="email">E-mail</label>
-                <input class="entrada" id="email" name="email" type="email" autocomplete="email" required></div>
-              <div class="campo"><label for="telefone">Celular (WhatsApp)</label>
-                <input class="entrada" id="telefone" name="telefone" type="tel" autocomplete="tel" inputmode="tel"></div>
               <div class="campo"><label for="perfil">Função que você ocupa</label>
                 <select class="entrada" id="perfil" name="perfil" required>
                   <option value="">Selecione…</option>
@@ -60,6 +57,12 @@ export default {
                 </select></div>
               <div class="aviso aviso-azul" id="aviso-vinculo" hidden style="margin-bottom:16px">${icone('organo')}
                 <div>O master vai definir quais regionais ou diretorias ficam sob sua responsabilidade ao aprovar o cadastro.</div></div>
+              <div class="campo"><label for="telefone">Celular com WhatsApp</label>
+                <input class="entrada" id="telefone" name="telefone" type="tel" autocomplete="tel" inputmode="numeric" placeholder="(81) 99999-9999" required>
+                <small>Usado para avisos das solicitações pelo WhatsApp.</small></div>
+              <div class="campo"><label for="email">E-mail</label>
+                <input class="entrada" id="email" name="email" type="email" autocomplete="email" required>
+                <small>Será o seu login e serve para recuperar a senha.</small></div>
               <div class="linha-campos">
                 <div class="campo"><label for="senha">Senha</label>
                   <input class="entrada" id="senha" name="senha" type="password" autocomplete="new-password" required></div>
@@ -82,6 +85,7 @@ export default {
       caixaErro.scrollIntoView({ block: 'center', behavior: 'smooth' });
     };
     form.nome.focus();
+    form.telefone.addEventListener('input', () => { form.telefone.value = mascaraCelular(form.telefone.value); });
     form.perfil.addEventListener('change', () => {
       const p = form.perfil.value;
       el.querySelector('#ajuda-perfil').textContent = AJUDA[p] || '';
@@ -92,10 +96,11 @@ export default {
       ev.preventDefault();
       caixaErro.innerHTML = '';
       const d = dadosDoForm(form);
-      if (d.nome.split(/\s+/).length < 2) return erro('Informe seu nome completo.');
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) return erro('Informe um e-mail válido.');
+      if (d.nome.split(/\s+/).length < 2) return erro('Informe seu nome completo (nome e sobrenome).');
       if (!d.perfil) return erro('Selecione a função que você ocupa.');
       if (PERFIS_DE_SALA.includes(d.perfil) && !d.sala_id) return erro('Selecione a sua sala de vendas.');
+      if (!celularValido(d.telefone)) return erro('Informe seu celular com DDD, por exemplo (81) 99999-9999.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) return erro('Informe um e-mail válido.');
       if (d.senha.length < 8 || !/[a-zA-Z]/.test(d.senha) || !/\d/.test(d.senha)) return erro('A senha precisa ter pelo menos 8 caracteres, com letras e números.');
       if (d.senha !== d.confirmar) return erro('A confirmação não confere com a senha.');
       delete d.confirmar;

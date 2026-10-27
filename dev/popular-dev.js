@@ -18,7 +18,8 @@ async function chamar(action, data, token) {
   const tm = (await chamar('auth.login', { email: 'master@gav.dev', senha: senhaMaster })).token;
   const tokens = {};
   async function usuario(nome, email, perfil, extra = {}) {
-    const r = await chamar('usuarios.salvar', { nome, email, perfil, ativo: true, ...extra }, tm);
+    const telefone = `(81) 9${String(8000 + Object.keys(tokens).length).padStart(4, '0')}-${String(1000 + Object.keys(tokens).length * 7)}`;
+    const r = await chamar('usuarios.salvar', { nome, email, perfil, ativo: true, telefone, ...extra }, tm);
     const l = await chamar('auth.login', { email, senha: r.senha_temporaria });
     await chamar('auth.trocarSenha', { senha_atual: r.senha_temporaria, nova_senha: SENHA }, l.token);
     tokens[email] = l.token;

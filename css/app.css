@@ -414,7 +414,7 @@ dl.dados dd { margin: 4px 0 0; font-weight: 500; word-break: break-word; }
 .toast.erro { border-left-color: var(--red); }
 .toast.ok { border-left-color: #3BC68A; }
 .toast a { color: var(--gold-400); font-weight: 600; }
-@media (max-width: 960px) { #toasts { left: 16px; right: 16px; bottom: calc(84px + var(--safe-bottom)); align-items: stretch; } .toast { max-width: none; } }
+@media (max-width: 960px) { #toasts { left: 16px; right: 16px; top: calc(12px + env(safe-area-inset-top, 0px)); bottom: auto; align-items: stretch; z-index: 120; } .toast { max-width: none; } }
 
 /* Login */
 .tela-auth { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--surface); }
@@ -528,3 +528,13 @@ dl.dados dd { margin: 4px 0 0; font-weight: 500; word-break: break-word; }
 }
 #acoes code { overflow-wrap: anywhere; font-size: 12px; }
 .tabela.cartoes .secundario { overflow-wrap: anywhere; }
+
+/* WhatsApp */
+.btn-whats { background: #25D366; color: #073B1E; height: auto; min-height: 46px; padding: 10px 18px; white-space: normal; }
+.btn-whats:hover { background: #2FE077; }
+.btn-whats small { font-weight: 500; opacity: .8; }
+.btn-whats svg.i { width: 20px; height: 20px; }
+.whats-selo { width: 56px; height: 56px; border-radius: 50%; background: #25D366; color: #fff; display: grid; place-items: center; margin: 0 auto 12px; }
+.whats-selo svg.i { width: 30px; height: 30px; }
+.contato-sem-whats { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+.contato-sem-whats small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
