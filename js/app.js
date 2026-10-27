@@ -1,7 +1,7 @@
 /**
  * Shell do app: rotas, menu por perfil, notificações e push.
  */
-import { html, api, sessao, icone, iniciais, PERFIS, APROVADORES, relativo, toast, caixaErro, ApiErro } from './core.js';
+import { html, api, sessao, icone, iniciais, CFG, PERFIS, APROVADORES, relativo, toast, caixaErro, ApiErro } from './core.js';
 import { iniciarPush, sairPush } from './push.js';
 import { assinatura, rosaSvg, abertura } from './marcas.js';
 import login from './views/login.js';
@@ -233,7 +233,7 @@ function alternarPainelNotif() {
 async function carregarConfigEPush() {
   try {
     if (!estado.appConfig) estado.appConfig = await api('app.config');
-    await iniciarPush(estado.appConfig.onesignal_app_id, sessao.usuario);
+    await iniciarPush(estado.appConfig.onesignal_app_id || CFG.ONESIGNAL_APP_ID, sessao.usuario);
   } catch (e) {
     console.warn('Push indisponível:', e.message);
   }

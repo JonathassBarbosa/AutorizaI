@@ -24,7 +24,7 @@ const contexto = vm.createContext(Object.assign({ console }, criarServicos(estad
 
 function carregarCodigo() {
   let codigo = fs.readFileSync(ARQ_GS, 'utf8');
-  if (novoDoZero || /seu-email/.test(codigo)) codigo = codigo.replace("'seu-email@gmail.com'", "'master@gav.dev'");
+  codigo = codigo.replace(/MASTER_EMAIL: '[^']*'/, "MASTER_EMAIL: 'master@gav.dev'"); // no simulador o master é sempre master@gav.dev
   vm.runInContext(codigo, contexto, { filename: 'Code.gs' });
 }
 carregarCodigo();

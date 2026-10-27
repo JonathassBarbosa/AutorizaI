@@ -538,3 +538,5 @@ dl.dados dd { margin: 4px 0 0; font-weight: 500; word-break: break-word; }
 .whats-selo svg.i { width: 30px; height: 30px; }
 .contato-sem-whats { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
 .contato-sem-whats small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.convite-push { margin-bottom: 16px; align-items: center; flex-wrap: wrap; }

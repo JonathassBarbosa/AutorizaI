@@ -2,6 +2,7 @@ import {
   html, api, icone, seloStatus, moeda, relativo, duracao, mesAtual, nomeMes, ultimosMeses, modal, ocupado, toast, vazio,
   APROVADORES, PERFIS,
 } from '../core.js';
+import { statusPush, ativarPush } from '../push.js';
 
 let mesEscolhido = mesAtual();
 
@@ -24,6 +25,34 @@ function linhaRecente(s) {
     <div><div class="sub">${s.sala_nome}</div><div class="codigo">${s.codigo}</div></div>
     <div class="sub">${relativo(s.criado_em)}</div>
     ${seloStatus(s.status)}${icone('seta')}</a>`;
+}
+
+async function mostrarConvitePush(el) {
+  let st = 'nao-configurado';
+  for (let i = 0; i < 10 && st === 'nao-configurado'; i++) { // o SDK do OneSignal carrega em segundo plano
+    st = await statusPush().catch(() => 'nao-configurado');
+    if (st === 'nao-configurado') await new Promise(r => setTimeout(r, 800));
+  }
+  if (st !== 'inativo' || !el.isConnected) return;
+  try { if (localStorage.getItem('gav_push_adiado') > Date.now()) return; } catch { /* sem storage */ }
+  const aviso = document.createElement('div');
+  aviso.className = 'aviso aviso-azul convite-push';
+  aviso.innerHTML = html`${icone('sino')}<div style="flex:1"><strong>Ative as notificações</strong><br>
+    Receba na hora os pedidos e as respostas, mesmo com o app fechado.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-claro btn-pequeno" data-depois>Depois</button>
+    <button class="btn btn-primario btn-pequeno" data-ativar>Ativar</button></div>`.toString();
+  el.querySelector('.cabecalho')?.after(aviso);
+  aviso.querySelector('[data-depois]').onclick = () => {
+    try { localStorage.setItem('gav_push_adiado', String(Date.now() + 3 * 86400000)); } catch { /* sem storage */ }
+    aviso.remove();
+  };
+  aviso.querySelector('[data-ativar]').onclick = async () => {
+    try {
+      const ok = await ativarPush();
+      toast(ok ? 'Notificações ativadas neste aparelho.' : 'Permissão não concedida no navegador.', ok ? 'ok' : 'erro');
+      if (ok) aviso.remove();
+    } catch (e) { toast(e.message, 'erro'); }
+  };
 }
 
 export default {
@@ -116,6 +145,7 @@ export default {
   },
 
   montar(el, ctx) {
+    mostrarConvitePush(el);
     el.querySelector('#mes').addEventListener('change', ev => {
       mesEscolhido = ev.target.value;
       ctx.ir('inicio?m=' + mesEscolhido);

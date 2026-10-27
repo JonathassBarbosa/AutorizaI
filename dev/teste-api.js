@@ -11,7 +11,7 @@ const { criarServicos } = require('./gas-mock');
 const estado = { abas: {}, props: {} };
 const ctx = vm.createContext(Object.assign({ console: { log() {} } }, criarServicos(estado)));
 const codigo = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8')
-  .replace("'seu-email@gmail.com'", "'master@gav.dev'");
+  .replace(/MASTER_EMAIL: '[^']*'/, "MASTER_EMAIL: 'master@gav.dev'");
 vm.runInContext(codigo, ctx, { filename: 'Code.gs' });
 
 const senhaMaster = ctx.setup().split('senha provisória: ')[1];

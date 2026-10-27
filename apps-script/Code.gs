@@ -11,11 +11,12 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.2.0',
+  VERSAO: '1.3.0',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
   NOME_REMETENTE: 'GAV Autorizações',    // nome que aparece nos e-mails enviados
+  ONESIGNAL_APP_ID: '1565517a-2ebe-43bb-bedf-815a35efe73a', // a chave REST fica só nas Propriedades do script
   TZ: 'America/Sao_Paulo',
   SESSAO_HORAS: 12,          // duração do login
   LOG_MAX_LINHAS: 5000,      // linhas mantidas na aba Logs
@@ -371,7 +372,7 @@ function formatarCpf_(cpf) {
 // ============================================================================
 function configPublica_() {
   const p = PropertiesService.getScriptProperties();
-  return { versao: CONFIG.VERSAO, onesignal_app_id: p.getProperty('ONESIGNAL_APP_ID') || '' };
+  return { versao: CONFIG.VERSAO, onesignal_app_id: p.getProperty('ONESIGNAL_APP_ID') || CONFIG.ONESIGNAL_APP_ID || '' };
 }
 
 function login_(d) {
@@ -1219,7 +1220,7 @@ function notificar_(usuarioIds, titulo, mensagem, link) {
 
 function enviarPush_(usuarioIds, titulo, mensagem, link) {
   const p = PropertiesService.getScriptProperties();
-  const appId = p.getProperty('ONESIGNAL_APP_ID');
+  const appId = p.getProperty('ONESIGNAL_APP_ID') || CONFIG.ONESIGNAL_APP_ID;
   const chave = p.getProperty('ONESIGNAL_REST_KEY');
   if (!appId || !chave) return;
   try {
@@ -1382,7 +1383,7 @@ function monitorStatus_(d) {
     },
     saude: {
       versao: CONFIG.VERSAO,
-      push_configurado: !!(p.getProperty('ONESIGNAL_APP_ID') && p.getProperty('ONESIGNAL_REST_KEY')),
+      push_configurado: !!((p.getProperty('ONESIGNAL_APP_ID') || CONFIG.ONESIGNAL_APP_ID) && p.getProperty('ONESIGNAL_REST_KEY')),
       app_url: CONFIG.APP_URL,
       abas: ss_().getSheets().map(s => ({ nome: s.getName(), linhas: Math.max(0, s.getLastRow() - 1) })),
       ultimo_erro: erros.length ? erros[erros.length - 1] : null,
