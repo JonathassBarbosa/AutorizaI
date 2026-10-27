@@ -1,4 +1,4 @@
-import { html, api, icone, iniciais, modal, ocupado, toast, confirmar, dadosDoForm, relativo, vazio, PERFIS } from '../core.js';
+import { html, api, icone, iniciais, modal, ocupado, toast, confirmar, dadosDoForm, relativo, vazio, PERFIS, porHierarquia } from '../core.js';
 import { mascaraCelular } from '../whatsapp.js';
 
 let usuarios = [];
@@ -39,6 +39,7 @@ export default {
   async render() {
     [usuarios, est] = await Promise.all([api('usuarios.listar'), api('estrutura.obter')]);
     const b = filtro.busca.toLowerCase();
+    usuarios.sort((a, b) => porHierarquia(a.perfil, b.perfil) || a.nome.localeCompare(b.nome));
     const pendentes = usuarios.filter(u => u.cadastro === 'pendente');
     const lista = usuarios.filter(u => u.cadastro !== 'pendente' && (!filtro.perfil || u.perfil === filtro.perfil)
       && (!b || (u.nome + ' ' + u.email + ' ' + u.vinculo).toLowerCase().includes(b)));
@@ -155,7 +156,7 @@ export default {
         corpo: html`<form id="form-ap">
           <p class="secundario" style="margin-top:0">${u.email}${u.telefone ? ` · ${u.telefone}` : ''}</p>
           <div class="campo"><label>Função</label><select class="entrada" name="perfil">
-            ${['consultor', 'gerente', 'assistente', 'regional', 'superintendente', 'diretor'].map(p => html`<option value="${p}" ${p === u.perfil ? 'selected' : ''}>${PERFIS[p]}</option>`)}</select>
+            ${['diretor', 'superintendente', 'regional', 'gerente', 'consultor', 'assistente'].map(p => html`<option value="${p}" ${p === u.perfil ? 'selected' : ''}>${PERFIS[p]}</option>`)}</select>
             <small>Confira se a função informada pela pessoa está correta.</small></div>
           <div id="vinculo-ap"></div></form>`,
         rodape: html`<button class="btn btn-claro" data-fechar>Cancelar</button><button class="btn btn-verde" type="submit" form="form-ap">${icone('check')} Aprovar acesso</button>`,

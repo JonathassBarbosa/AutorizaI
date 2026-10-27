@@ -27,7 +27,7 @@ function documentoImpressao(s) {
     <table>${linhas.map(([k, v]) => html`<tr><td>${k}</td><td>${v}</td></tr>`)}</table>
     <p style="font-size:11px;color:#555">A autenticidade pode ser conferida no sistema pela opção "Verificar autorização" com o código acima.
       Emitido em ${dataHora(new Date().toISOString())}.</p>
-    <div class="assinaturas"><div>Consultor</div><div>Assistente de contratos</div><div>Cliente</div></div>
+    <div class="assinaturas"><div>Consultor de Vendas</div><div>Assistente de Contratos</div><div>Cliente</div></div>
   </div>`;
 }
 
@@ -105,7 +105,7 @@ export default {
 
           ${s.pode_desfecho ? html`
             <div class="card">
-              <div class="card-topo"><h3>Registrar desfecho</h3><small>Assistente de contratos</small></div>
+              <div class="card-topo"><h3>Registrar desfecho</h3><small>Assistente de Contratos</small></div>
               <form class="card-corpo" id="form-desfecho">
                 <div class="opcoes-radio">
                   <label class="opcao-radio"><input type="radio" name="desfecho" value="venda_finalizada" checked>

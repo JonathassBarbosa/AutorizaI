@@ -13,9 +13,9 @@ function cardSala(s) {
   return html`<div class="org-sala ${s.ativo ? '' : 'inativa'}" data-editar="sala" data-id="${s.id}">
     <div style="display:flex;justify-content:space-between;gap:8px"><strong>${s.nome}</strong>
       ${s.limite_pct ? html`<span class="selo selo-ouro sem-ponto">${s.limite_pct}%</span>` : ''}</div>
-    <small>Gerente: ${s.gerentes.length ? s.gerentes.join(', ') : '—'}</small>
-    <small>Assistente: ${s.assistentes.length ? s.assistentes.join(', ') : '—'}</small>
-    <small>${s.consultores.length} consultor(es)${s.ativo ? '' : ' · inativa'}</small>
+    <small>Gerente de Sala: ${s.gerentes.length ? s.gerentes.join(', ') : '—'}</small>
+    <small>Consultores de Vendas: ${s.consultores.length}</small>
+    <small>Assistente de Contratos: ${s.assistentes.length ? s.assistentes.join(', ') : '—'}${s.ativo ? '' : ' · inativa'}</small>
   </div>`;
 }
 
@@ -40,7 +40,7 @@ export default {
     return html`
       <div class="cabecalho">
         <div><h2 style="font-size:22px">Diretorias, regionais e salas</h2>
-          <p>Superintendente responde pela diretoria · Regional pela regional · Gerentes, assistentes e consultores pela sala.</p></div>
+          <p>Diretoria → Superintendente → Regional → Gerente de Sala → Consultor de Vendas → Assistente de Contratos.</p></div>
         <div class="acoes">
           <button class="btn btn-claro" data-novo="diretoria">${icone('mais')} Diretoria</button>
           <button class="btn btn-claro" data-novo="regional">${icone('mais')} Regional</button>
@@ -48,12 +48,12 @@ export default {
         </div>
       </div>
       ${nada ? html`<div class="card">${vazio('Comece pela estrutura',
-        html`1) Cadastre os <a href="#/usuarios">usuários</a> superintendentes e regionais · 2) crie a diretoria · 3) as regionais · 4) as salas · 5) vincule gerentes, assistentes e consultores às salas.`, 'organo')}</div>` : ''}
+        html`1) Cadastre os <a href="#/usuarios">usuários</a> da diretoria, superintendentes e regionais · 2) crie a diretoria · 3) as regionais · 4) vincule as salas às regionais · 5) aprove gerentes de sala, consultores de vendas e assistentes de contratos.`, 'organo')}</div>` : ''}
 
       ${est.diretorias.map(d => html`<div class="card org-dir">
         <div class="card-topo"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-          <h3 style="font-size:17px">${d.nome}${d.ativo ? '' : ' (inativa)'}</h3>${pessoa(d.superintendente_nome, 'Superintendente')}
-          ${d.diretores.map(n => pessoa(n, 'Diretoria'))}</div>
+          <h3 style="font-size:17px">${d.nome}${d.ativo ? '' : ' (inativa)'}</h3>
+          ${d.diretores.map(n => pessoa(n, 'Diretoria'))}${pessoa(d.superintendente_nome, 'Superintendente')}</div>
           <button class="editar-link" data-editar="diretoria" data-id="${d.id}" title="Editar diretoria">${icone('editar')}</button></div>
         <div class="org-regionais">${est.regionais.filter(r => r.diretoria_id === d.id).map(blocoRegional)}
           ${!est.regionais.some(r => r.diretoria_id === d.id) ? html`<span class="secundario">Nenhuma regional nesta diretoria.</span>` : ''}</div>
@@ -89,7 +89,7 @@ export default {
           <div class="campo"><label>Limite de exceções no mês (%)</label>
             <input class="entrada" name="limite_pct" type="number" min="0" max="100" step="0.5" value="${reg.limite_pct ?? 0}">
             <small>Quando a sala atinge este percentual, novas exceções sobem um nível de alçada. 0 = sem limite.</small></div>
-          ${id ? html`<div class="aviso aviso-azul">${icone('usuarios')}<div>Gerentes, assistentes e consultores são vinculados à sala no cadastro de <a href="#/usuarios">Usuários</a>.</div></div>` : ''}`;
+          ${id ? html`<div class="aviso aviso-azul">${icone('usuarios')}<div>Gerentes de sala, consultores de vendas e assistentes de contratos são vinculados à sala no cadastro de <a href="#/usuarios">Usuários</a>.</div></div>` : ''}`;
       }
       const m = modal({
         titulo: `${id ? 'Editar' : 'Nova'} ${tipo}`,

@@ -24,11 +24,12 @@ const CONFIG = {
   LOGIN_TENTATIVAS: 5,       // tentativas erradas antes de bloquear por 15 min
 };
 
-const PERFIS = ['master', 'diretor', 'superintendente', 'regional', 'gerente', 'assistente', 'consultor'];
+// Hierarquia: Diretoria → Superintendente → Regional → Gerente de Sala → Consultor de Vendas → Assistente de Contratos
+const PERFIS = ['master', 'diretor', 'superintendente', 'regional', 'gerente', 'consultor', 'assistente'];
 const NIVEL = { consultor: 0, assistente: 0, gerente: 1, regional: 2, superintendente: 3, diretor: 4, master: 9 };
 const ALCADAS = ['gerente', 'regional', 'superintendente', 'diretor'];
 const PERFIS_DE_SALA = ['gerente', 'assistente', 'consultor'];
-const PERFIS_AUTOCADASTRO = ['consultor', 'gerente', 'assistente', 'regional', 'superintendente', 'diretor'];
+const PERFIS_AUTOCADASTRO = ['diretor', 'superintendente', 'regional', 'gerente', 'consultor', 'assistente'];
 
 // Salas de vendas cadastradas automaticamente pelo setup (o master vincula cada uma à sua regional).
 const SALAS_PADRAO = [
@@ -1081,8 +1082,8 @@ function recusarCadastro_(d, u) {
 }
 
 function rotuloPerfil_(p) {
-  return { master: 'Master', diretor: 'Diretoria', superintendente: 'Superintendente', regional: 'Regional', gerente: 'Gerente',
-    assistente: 'Assistente de contratos', consultor: 'Consultor' }[p] || p;
+  return { master: 'Master', diretor: 'Diretoria', superintendente: 'Superintendente', regional: 'Regional', gerente: 'Gerente de Sala',
+    consultor: 'Consultor de Vendas', assistente: 'Assistente de Contratos' }[p] || p;
 }
 
 // ============================================================================

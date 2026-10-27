@@ -1,8 +1,8 @@
-import { html, api, icone, dadosDoForm, PERFIS } from '../core.js';
+import { html, api, icone, dadosDoForm, PERFIS, porHierarquia } from '../core.js';
 import { assinatura, processando } from '../marcas.js';
 import { mascaraCelular, celularValido } from '../whatsapp.js';
 
-const PERFIS_DE_SALA = ['consultor', 'gerente', 'assistente'];
+const PERFIS_DE_SALA = ['gerente', 'consultor', 'assistente'];
 const AJUDA = {
   consultor: 'Pede autorizações para vendas fora da regra.',
   gerente: 'Aprova as exceções da sua sala.',
@@ -47,7 +47,7 @@ export default {
               <div class="campo"><label for="perfil">Função que você ocupa</label>
                 <select class="entrada" id="perfil" name="perfil" required>
                   <option value="">Selecione…</option>
-                  ${opcoes.perfis.map(p => html`<option value="${p}">${PERFIS[p]}</option>`)}
+                  ${opcoes.perfis.slice().sort(porHierarquia).map(p => html`<option value="${p}">${PERFIS[p]}</option>`)}
                 </select>
                 <small id="ajuda-perfil"></small></div>
               <div class="campo" id="campo-sala" hidden><label for="sala_id">Sala de vendas</label>

@@ -75,11 +75,14 @@ export async function api(acao, dados = {}) {
 }
 
 // ---------------------------------------------------------------- Rótulos
+// Na ordem da hierarquia: Diretoria → Superintendente → Regional → Gerente de Sala → Consultor de Vendas → Assistente de Contratos
 export const PERFIS = {
   master: 'Master', diretor: 'Diretoria', superintendente: 'Superintendente', regional: 'Regional',
-  gerente: 'Gerente', assistente: 'Assistente de contratos', consultor: 'Consultor',
+  gerente: 'Gerente de Sala', consultor: 'Consultor de Vendas', assistente: 'Assistente de Contratos',
 };
-export const ALCADAS = { gerente: 'Gerente', regional: 'Regional', superintendente: 'Superintendente', diretor: 'Diretoria' };
+export const ORDEM_PERFIS = Object.keys(PERFIS);
+export const porHierarquia = (a, b) => ORDEM_PERFIS.indexOf(a) - ORDEM_PERFIS.indexOf(b);
+export const ALCADAS = { gerente: 'Gerente de Sala', regional: 'Regional', superintendente: 'Superintendente', diretor: 'Diretoria' };
 export const STATUS = {
   pendente: ['Pendente', 'ambar'], aprovada: ['Aprovada', 'verde'], negada: ['Negada', 'vermelho'], cancelada: ['Cancelada', 'cinza'],
 };
