@@ -14,8 +14,13 @@ export function logoSvg({ classe = '', animado = false, titulo = 'GAV' } = {}) {
 
 /** Rosa dos ventos em SVG. modo: 'parada' | 'abrir' (abre uma vez) | 'girando' (abre e fica girando). */
 export function rosaSvg({ classe = '', modo = 'parada' } = {}) {
-  return raw(`<svg class="marca-rosa rosa-${modo} ${classe}" viewBox="0 0 ${ROSA.w} ${ROSA.h}" role="img" aria-label="Rosa dos ventos GAV">
+  return raw(`<svg class="marca-rosa rosa-${modo} ${classe}" viewBox="0 0 ${ROSA.w} ${ROSA.h}" role="img" aria-label="Rosa dos ventos">
     <g class="rosa-giro">${ROSA.petalas.map((d, i) => `<path d="${d}" style="--i:${i}"/>`).join('')}</g></svg>`);
+}
+
+/** Marca pública do app: só a rosa dos ventos e o nome "AutorizaI" (telas abertas, sem login). */
+export function marcaApp({ classe = '', animado = false } = {}) {
+  return raw(`<span class="marca-app ${animado ? 'animado' : ''} ${classe}">${rosaSvg({ modo: animado ? 'abrir' : 'parada' })}<span class="marca-app-nome">AutorizaI</span></span>`);
 }
 
 /** Logotipo completo com a assinatura "Hotéis e Resorts". */
@@ -28,13 +33,13 @@ const reduzMovimento = () => window.matchMedia('(prefers-reduced-motion: reduce)
 // ---------------------------------------------------------------- Abertura do app
 let aberturaMostrada = false;
 
-/** Mostra a abertura animada com o logotipo. Resolve quando ela some. */
+/** Mostra a abertura animada com a rosa dos ventos e o nome do app. Resolve quando ela some. */
 export function abertura(tempoMinimo = 2300) {
   if (aberturaMostrada) return Promise.resolve();
   aberturaMostrada = true;
   const el = document.createElement('div');
   el.className = 'abertura';
-  el.innerHTML = `${assinatura({ animado: true }).toString()}<i class="abertura-onda"></i>`;
+  el.innerHTML = `${marcaApp({ animado: true }).toString()}<i class="abertura-onda"></i>`;
   document.body.appendChild(el);
   const duracao = reduzMovimento() ? 400 : tempoMinimo;
   return new Promise(resolve => {

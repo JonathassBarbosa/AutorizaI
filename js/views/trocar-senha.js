@@ -1,5 +1,5 @@
 import { html, api, sessao, icone, ocupado, dadosDoForm, toast } from '../core.js';
-import { assinatura } from '../marcas.js';
+import { marcaApp } from '../marcas.js';
 
 /** Formulário de troca de senha, reaproveitado pela tela "Meu perfil". */
 export function formSenha(obrigatoria) {
@@ -56,10 +56,10 @@ export default {
     const u = sessao.usuario;
     return html`
       <div class="tela-auth">
-        <section class="auth-marca">${assinatura({ classe: 'grande' })}<div><h2>Olá, <em>${u?.nome?.split(' ')[0] || ''}</em>.</h2>
+        <section class="auth-marca">${marcaApp({ classe: 'grande' })}<div><h2>Olá, <em>${u?.nome?.split(' ')[0] || ''}</em>.</h2>
           <p>Este é seu primeiro acesso. Defina uma senha que só você conheça.</p></div><small></small></section>
         <section class="auth-form"><div class="caixa-auth">
-          <div class="auth-logo-mobile">${assinatura({ classe: 'grande' })}</div>
+          <div class="auth-logo-mobile">${marcaApp({ classe: 'grande' })}</div>
           <h1 style="margin-bottom:18px">Criar sua senha</h1>
           ${formSenha(true)}
           <p style="text-align:center;margin-top:16px"><button class="btn btn-link" onclick="GAVSair()">Sair</button></p>

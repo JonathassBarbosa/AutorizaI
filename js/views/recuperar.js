@@ -1,5 +1,5 @@
 import { html, api, icone, dadosDoForm, toast } from '../core.js';
-import { assinatura, processando } from '../marcas.js';
+import { marcaApp, processando } from '../marcas.js';
 
 let emailInformado = '';
 
@@ -36,11 +36,11 @@ export default {
   render() {
     return html`
       <div class="tela-auth">
-        <section class="auth-marca">${assinatura({ classe: 'grande' })}
+        <section class="auth-marca">${marcaApp({ classe: 'grande' })}
           <div><h2>Recupere seu <em>acesso</em>.</h2><p>O código chega no seu e-mail e vale por 15 minutos.</p></div>
-          <small>© ${new Date().getFullYear()} GAV Resorts</small></section>
+          <small>Uso interno · acesso restrito</small></section>
         <section class="auth-form"><div class="caixa-auth">
-          <div class="auth-logo-mobile">${assinatura({ classe: 'grande' })}</div>
+          <div class="auth-logo-mobile">${marcaApp({ classe: 'grande' })}</div>
           <div id="passo">${passoEmail()}</div>
           <p style="text-align:center;margin:18px 0 0;font-size:14px"><a href="#/login">Voltar para o login</a></p>
         </div></section>
