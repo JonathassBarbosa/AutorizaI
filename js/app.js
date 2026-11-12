@@ -18,6 +18,8 @@ import usuarios from './views/usuarios.js';
 import tipos from './views/tipos.js';
 import monitor from './views/monitor.js';
 import perfil from './views/perfil.js';
+import painel from './views/painel.js';
+import regras from './views/regras.js';
 
 const TODOS = Object.keys(PERFIS);
 const QUEM_CRIA = ['consultor', 'gerente', 'regional', 'superintendente', 'diretor', 'master']; // o assistente não solicita
@@ -25,7 +27,7 @@ const QUEM_VERIFICA = ['assistente', 'gerente', 'regional', 'superintendente', '
 
 const VIEWS = {
   login, cadastro, recuperar, 'trocar-senha': trocarSenha, inicio, solicitacoes: listaSolicitacoes, aprovacoes: listaAprovacoes,
-  solicitacao: detalhe, nova, verificar, estrutura, usuarios, tipos, monitor, perfil,
+  solicitacao: detalhe, nova, verificar, estrutura, usuarios, tipos, monitor, perfil, painel, regras,
 };
 
 const MENU = [
@@ -35,10 +37,12 @@ const MENU = [
   { rota: 'aprovacoes', titulo: 'Aprovações', icone: 'escudo', perfis: APROVADORES, barra: true, contador: 'para_aprovar' },
   { rota: 'nova', titulo: 'Nova solicitação', icone: 'mais', perfis: QUEM_CRIA, barra: true },
   { rota: 'verificar', titulo: 'Verificar autorização', icone: 'busca', perfis: QUEM_VERIFICA, barra: true },
+  { rota: 'painel', titulo: 'Painel e relatório', icone: 'grafico', perfis: TODOS },
   { secao: 'Administração', perfis: ['master'] },
   { rota: 'estrutura', titulo: 'Estrutura', icone: 'organo', perfis: ['master'] },
   { rota: 'usuarios', titulo: 'Usuários', icone: 'usuarios', perfis: ['master'], contador: 'cadastros_pendentes' },
   { rota: 'tipos', titulo: 'Tipos de exceção', icone: 'etiqueta', perfis: ['master'] },
+  { rota: 'regras', titulo: 'Regras de alçada', icone: 'regua', perfis: ['master'] },
   { rota: 'monitor', titulo: 'Monitor', icone: 'pulso', perfis: ['master'] },
 ];
 

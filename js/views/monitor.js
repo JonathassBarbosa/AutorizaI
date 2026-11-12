@@ -10,6 +10,22 @@ let desde = 0;
 let ultimaResposta = null;
 let falhas = 0;
 let aberto = null;
+let alertaDestaque = null;
+
+function desenharAlertas(lista) {
+  const caixa = document.getElementById('alertas');
+  if (!caixa) return;
+  caixa.innerHTML = (lista || []).length ? `<div class="card" style="margin-bottom:16px"><div class="card-topo"><h3 style="color:var(--red)">Alertas críticos em aberto (${lista.length})</h3><small>o master recebe e-mail e notificação de cada um</small></div>
+    <div class="card-corpo" style="display:grid;gap:12px">${lista.map(a => `<div class="alerta-critico ${a.id === alertaDestaque ? 'destaque' : ''}" id="alerta-${esc(a.id)}">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><span class="tipo">${esc(a.tipo)}</span>
+        <span class="secundario" style="font-size:12.5px">${esc(relativo(a.ultima_vez))} · ${esc(a.ocorrencias)} ocorrência(s) · ${esc(a.origem)}</span></div>
+      <div class="local">📍 ${esc(a.local || 'local não identificado')}</div>
+      <div>${esc(a.mensagem)}</div>
+      <div class="solucao"><strong>Como resolver:</strong> ${esc(a.solucao)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn btn-claro btn-pequeno" data-resolver="${esc(a.id)}">${icone('check')} Marcar como resolvido</button>
+        <span class="secundario" style="font-size:12px">Código ${esc(a.id)} · primeira vez ${esc(dataHora(a.data))} · ação ${esc(a.acao)} · ${esc(a.usuario)}</span></div>
+    </div>`).join('')}</div></div>` : '';
+}
 
 function detalhesFormatados(l) {
   let d = l.detalhes;
@@ -59,8 +75,11 @@ function desenharPainel(r) {
   set('acoes', m.acoes.length ? m.acoes.map(a => `<tr><td><code>${esc(a.acao)}</code></td><td class="num">${a.total}</td>
     <td class="num" style="color:${a.erros ? 'var(--red)' : 'inherit'}">${a.erros}</td><td class="num">${a.media_ms} ms</td></tr>`).join('')
     : '<tr><td colspan="4" class="secundario">Sem operações nos últimos 15 min.</td></tr>');
+  desenharAlertas(r.alertas);
   set('saude', `
     <div style="display:flex;justify-content:space-between"><span>Versão da API</span><strong>${esc(s.versao)}</strong></div>
+    <div style="display:flex;justify-content:space-between"><span>Regras de comercialização</span>${s.regras_instaladas
+      ? '<span class="selo selo-verde">Instaladas</span>' : '<span class="selo selo-vermelho">Falta o arquivo RegrasPagamento</span>'}</div>
     <div style="display:flex;justify-content:space-between"><span>Push (OneSignal)</span>${s.push_configurado
       ? '<span class="selo selo-verde">Configurado</span>' : '<span class="selo selo-ambar">Não configurado</span>'}</div>
     <div style="display:flex;justify-content:space-between"><span>Leitura dos logs</span><strong>${s.tempo_leitura_ms} ms</strong></div>
@@ -126,6 +145,7 @@ export default {
       </div>
       <div class="espaco"></div>
 
+      <div id="alertas"></div>
       <div class="grade grade-lateral">
         <div class="grade">
           <div id="ultimo-erro"></div>
@@ -148,8 +168,9 @@ export default {
       </div>`;
   },
 
-  montar(el) {
+  montar(el, ctx) {
     pausado = false;
+    alertaDestaque = ctx?.rota?.query.get('alerta') || null;
     ciclo();
     timer = setInterval(() => { if (!document.hidden) ciclo(); }, INTERVALO_MS);
 
@@ -168,7 +189,16 @@ export default {
       logs = []; vistos = new Set(); desde = 0;
       ciclo();
     });
-    el.addEventListener('click', ev => {
+    el.addEventListener('click', async ev => {
+      const res = ev.target.closest('[data-resolver]');
+      if (res) {
+        try {
+          const r = await api('monitor.resolverAlerta', { id: res.dataset.resolver });
+          desenharAlertas(r.alertas);
+          toast('Alerta marcado como resolvido.', 'ok');
+        } catch (e) { toast(e.message, 'erro'); }
+        return;
+      }
       const f = ev.target.closest('[data-filtro]');
       if (f) {
         somenteErros = f.dataset.filtro === 'erros';

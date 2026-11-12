@@ -1,9 +1,10 @@
 import {
-  html, api, icone, seloStatus, seloDesfecho, moeda, dataHora, relativo, ocupado, toast, confirmar, dadosDoForm,
+  html, raw, api, icone, seloStatus, seloDesfecho, moeda, dataHora, relativo, ocupado, toast, confirmar, dadosDoForm,
   ALCADAS, PERFIS, dadosCliente,
 } from '../core.js';
 import { logoSvg, processando } from '../marcas.js';
 import { botaoWhats, modalWhats, textoPedido, textoResposta, ICONE_WHATS } from '../whatsapp.js';
+import { resumoNegociacao } from '../negociacao.js';
 
 const contatoSolicitante = s => ({ nome: s.consultor_nome, perfil: '', whatsapp: s.consultor_whatsapp });
 const podeAvisarAprovador = (s, u) => s.status === 'pendente' && (s.consultor_id === u.id || u.perfil === 'master');
@@ -36,6 +37,11 @@ export default {
   async render(ctx) {
     const s = await api('solicitacoes.obter', { id: ctx.rota.params[0] });
     atual = s;
+    // Pedido com alçada automática: recalcula o cronograma com as regras para mostrar ao aprovador
+    let negociacaoHtml = '';
+    if (s.negociacao && window.RegrasPagamento) {
+      try { negociacaoHtml = resumoNegociacao(s, (await api('regras.obter')).config); } catch { negociacaoHtml = ''; }
+    }
     const u = ctx.usuario;
     const campos = Object.entries(s.campos || {});
     return html`
@@ -94,6 +100,8 @@ export default {
                 <p style="margin:6px 0 0;white-space:pre-wrap">${s.justificativa}</p></div>
             </div>
           </div>
+
+          ${raw(negociacaoHtml)}
 
           ${s.desfecho ? html`<div class="card"><div class="card-topo"><h3>Desfecho</h3>${seloDesfecho(s.desfecho)}</div>
             <div class="card-corpo"><dl class="dados">

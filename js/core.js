@@ -83,6 +83,8 @@ export const PERFIS = {
 export const ORDEM_PERFIS = Object.keys(PERFIS);
 export const porHierarquia = (a, b) => ORDEM_PERFIS.indexOf(a) - ORDEM_PERFIS.indexOf(b);
 export const ALCADAS = { gerente: 'Gerente de Sala', regional: 'Regional', superintendente: 'Superintendente', diretor: 'Diretoria' };
+/** Alçadas possíveis de um tipo de exceção: as fixas ou a automática pelas regras de comercialização. */
+export const ALCADAS_TIPO = { ...ALCADAS, auto: 'Automática pelas regras' };
 export const STATUS = {
   pendente: ['Pendente', 'ambar'], aprovada: ['Aprovada', 'verde'], negada: ['Negada', 'vermelho'], cancelada: ['Cancelada', 'cinza'],
 };
@@ -195,6 +197,8 @@ const ICONES = {
   celular: '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>',
   qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>',
   grafico: '<path d="M4 20V4M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/>',
+  baixar: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
+  regua: '<path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/>',
 };
 export const icone = (nome, extra = '') => raw(`<svg class="i ${extra}" viewBox="0 0 24 24" aria-hidden="true">${ICONES[nome] || ''}</svg>`);
 

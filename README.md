@@ -119,7 +119,39 @@ Sem o OneSignal, os avisos aparecem só no sino dentro do app. Com ele, chegam c
 
 Cole o novo `apps-script/Code.gs`, mantenha o seu e-mail em `MASTER_EMAIL`, salve e publique uma **nova versão** (Implantar → Gerenciar implantações → ✏️ → Nova versão). Não é preciso rodar o `setup` de novo.
 
+## Atualizando para a versão 1.6 (alçada automática, painel e alertas)
+
+1. No Apps Script, cole o novo `apps-script/Code.gs` (mantenha o seu e-mail em `MASTER_EMAIL`) e salve.
+2. **Arquivo novo:** no editor, clique em **+ → Script**, dê o nome **`RegrasPagamento`** e cole todo o conteúdo de `js/regras-pagamento.js`. É o mesmo motor de regras que roda no app: o servidor refaz as contas com ele e não confia no navegador. **Sempre que mudar `js/regras-pagamento.js`, cole de novo aqui.**
+3. Rode a função **`setup`**. Ela não apaga nada: cria a aba `Alertas`, as colunas novas de `Solicitacoes` (`negociacao`, `regras`, `aceite_cliente`) e o tipo **Condição de pagamento fora da regra**.
+4. **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar.**
+5. Só depois disso publique o site novo no GitHub Pages (o app novo chama ações da API que só existem na 1.6).
+6. No **Monitor**, confira em **Saúde** que "Regras de comercialização" aparece como **Instaladas**.
+
+### Alçada automática pelas regras de comercialização
+
+No tipo **Condição de pagamento fora da regra**, o consultor preenche a negociação (modelo de venda, cotas, 1ª parcela, entrada restante, sinal e saldo) e o app mostra na hora, numa faixa no topo, **para quem vai a autorização e por quê**. As regras vêm da política PO.02.01.001, da calculadora de pagamentos e das definições do comercial:
+
+- **Consultor (sem autorização):** 1ª parcela de pelo menos R$ 1.330 por cota; restante em até 2x terminando até o 2º mês após a venda; entrada inteira no crédito em até 5x; sinal em até 150 dias e logo após a última parcela da entrada.
+- **Gerente de Sala:** 1ª parcela de R$ 1.000 a R$ 1.329,99 por cota; restante em 3 a 5x ou terminando até o 5º mês; desconto à vista acima de 7% e até 10%.
+- **Regional** (ou Superintendente, o Gerente Nacional): sinal entre 151 e 210 dias; entrada inteira no crédito em 6x.
+- **Diretoria:** sinal acima de 210 dias; mês sem pagamento entre as entradas ou antes do sinal; crédito acima de 6x; restante acima de 5x; sinal ou saldo acima do máximo do modelo; desconto à vista acima de 10%; qualquer condição fora da política.
+- **Só aceite do cliente (choque de parcelas):** sinal antes do fim da entrada, saldo antes do fim do sinal ou restante no mês da 1ª parcela.
+- **Bloqueado:** 1ª parcela abaixo de R$ 1.000 fora do Linear; 1ª parcela em duas formas sem somar R$ 1.000 em 30 dias; 1ª parcela em boleto; saldo fora do dia 05 ou 10.
+- **Vendas a partir do dia 20:** o 1º vencimento pode ser em até 50 dias e o prazo inteiro da entrada anda um mês.
+- **Modelos de venda:** Padrão, Padrão (Combo), Até 36x, Anual, Semestral, À vista e Linear, cada um com suas faixas. Sinal = 5% do valor da cota; saldo = valor − entrada − sinal.
+- **Várias cotas:** nada é somado. Mesmo empreendimento e valor copia o financeiro; mesma entrada mantém a negociação da entrada; entrada diferente exige preencher tudo. A alçada é a mais alta entre as cotas.
+
+O master ajusta parâmetros e a ação de cada regra em **Regras de alçada**. Continua valendo a subida de um nível quando a sala passa do limite % e a passagem do aviso para o nível de cima quando o cargo está vago.
+
+### Painel e relatório
+
+Em **Painel e relatório**, cada pessoa vê o seu escopo (consultor: as próprias; gerente: a sala; regional e superintendente: as salas das regionais; diretoria: as das diretorias; master: todas) por período, sala, alçada e status: totais, por alçada, por tipo de solicitação (no tipo automático, cada regra que pediu autorização), matriz sala × tipo, quem autorizou e quem pediu. **Exportar relatório completo** baixa um CSV (abre no Excel) com cada solicitação, o solicitante e o autorizador (nome, perfil e e-mail), datas, tempo de resposta e desfecho.
+
 ## Monitor (perfil master)
+
+**Alertas de erro crítico (1.6):** quando o servidor registra um erro de verdade (ou o mesmo erro aparece 3 vezes em 15 minutos no navegador dos usuários), o master recebe **e-mail** e **notificação no app** com o tipo do erro, o local exato e **como resolver**. O mesmo erro só gera novo e-mail depois de 30 minutos, com no máximo 20 e-mails de alerta por dia (ajustável em `CONFIG`). Os alertas abertos aparecem no topo do Monitor com o botão **Marcar como resolvido**.
+
 
 Em **Monitor**, atualizado a cada 4 segundos:
 
@@ -161,7 +193,7 @@ Com o Node.js instalado:
 node dev/teste-api.js
 ```
 
-Roda 11 cenários automáticos sobre o `Code.gs` real: permissões, alçadas, limite %, desfecho e monitor.
+Roda os cenários automáticos sobre o `Code.gs` real: permissões, alçadas, limite %, desfecho, monitor, alçada automática, painel, exportação e alertas. O motor de regras tem testes próprios: `node dev/teste-regras.js`.
 
 ```bash
 node dev/server.js
