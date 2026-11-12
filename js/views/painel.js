@@ -3,6 +3,7 @@ import { html, api, icone, toast, ocupado, vazio, duracao, nomeMes, ultimosMeses
 const filtros = { de: mesAtual(), ate: mesAtual(), sala_id: '', status: '', alcada: '' };
 const pl = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const resumoStatus = x => `${pl(x.aprovadas, 'aprovada', 'aprovadas')} · ${pl(x.negadas, 'negada', 'negadas')} · ${pl(x.pendentes, 'pendente', 'pendentes')}`;
+const EXPORTA = ['gerente', 'regional', 'superintendente', 'diretor', 'master']; // a exportação traz e-mails: só a gestão
 const COR_ALCADA = { gerente: 'var(--nv-gerente)', regional: 'var(--nv-regional)', superintendente: 'var(--nv-superintendente)', diretor: 'var(--nv-diretor)' };
 
 function kpi(rotulo, valor, sub, cor, destaque = false) {
@@ -40,13 +41,14 @@ export default {
     const k = d.kpis;
     const meses = ultimosMeses(24);
     const amplo = ['diretor', 'master'].includes(u.perfil);
+    const podeExportar = EXPORTA.includes(u.perfil);
     const maxTipo = Math.max(1, ...d.por_tipo.map(t => t.total));
     const escopo = u.perfil === 'consultor' ? 'Suas solicitações' : u.perfil === 'gerente' ? 'Solicitações da sua sala'
       : amplo ? (u.perfil === 'master' ? 'Todas as salas' : 'Salas das suas diretorias') : 'Salas das suas regionais';
     return html`
       <div class="cabecalho">
         <div><h2 style="font-size:22px">Painel de solicitações</h2><p>${escopo} · ${PERFIS[u.perfil]}</p></div>
-        <div class="acoes"><button class="btn btn-ouro" id="exportar" type="button">${icone('baixar')} Exportar relatório completo</button></div>
+        ${podeExportar ? html`<div class="acoes"><button class="btn btn-ouro" id="exportar" type="button">${icone('baixar')} Exportar relatório completo</button></div>` : ''}
       </div>
       <div class="card"><div class="card-corpo">
         <form class="filtros-painel" id="filtros">
@@ -124,7 +126,7 @@ export default {
       if (campo === 'ate' && filtros.ate < filtros.de) filtros.de = filtros.ate;
       ctx.ir('painel?t=' + Date.now());
     });
-    el.querySelector('#exportar').addEventListener('click', async ev => {
+    el.querySelector('#exportar')?.addEventListener('click', async ev => {
       try {
         const r = await ocupado(ev.currentTarget, () => api('relatorio.exportar', filtros));
         if (!r.linhas.length) return toast('Nenhuma solicitação no período escolhido.', 'info');

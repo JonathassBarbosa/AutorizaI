@@ -40,7 +40,8 @@ export default {
     // Pedido com alçada automática: recalcula o cronograma com as regras para mostrar ao aprovador
     let negociacaoHtml = '';
     if (s.negociacao && window.RegrasPagamento) {
-      try { negociacaoHtml = resumoNegociacao(s, (await api('regras.obter')).config); } catch { negociacaoHtml = ''; }
+      // Pedidos novos guardam as regras usadas no envio; os antigos usam as regras atuais
+      try { negociacaoHtml = resumoNegociacao(s, s.negociacao.cfg || (await api('regras.obter')).config); } catch { negociacaoHtml = ''; }
     }
     const u = ctx.usuario;
     const campos = Object.entries(s.campos || {});

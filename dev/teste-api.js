@@ -294,7 +294,8 @@ const sc = ok('solicitacoes.criar', pedidoAuto({ rParc: 5, sMes: 4 }), tc3);
 assert.strictEqual(sc.alcada, 'superintendente');
 ok('solicitacoes.cancelar', { id: sc.id }, tc3);
 ok('regras.salvar', cfgRegras.config, tm);
-passo('regras: só o master edita, e a alçada passa a valer na hora');
+assert.strictEqual(ok('solicitacoes.obter', { id: sc.id }, tc3).negociacao.cfg.acoes.sinal_reg, 'superintendente', 'o pedido guarda as regras usadas no envio');
+passo('regras: só o master edita, a alçada passa a valer na hora e cada pedido guarda as regras do envio');
 
 // --- painel e relatório por escopo
 const relM = ok('relatorio.obter', { de: mes, ate: mes }, tm);
@@ -314,8 +315,9 @@ const linhaA = exp.linhas.find(l => l[0] === sa.codigo);
 assert.strictEqual(linhaA[exp.colunas.indexOf('Solicitante')], 'Marcos Muro Alto');
 assert.strictEqual(linhaA[exp.colunas.indexOf('Autorizador')], 'Rafael Regional');
 assert.strictEqual(linhaA[exp.colunas.indexOf('Perfil do autorizador')], 'Regional');
-assert.strictEqual(ok('relatorio.exportar', { de: mes, ate: mes }, tc3).linhas.length, 3);
-passo('painel: escopo por perfil, tipos e motivos, alçadas, aprovadores; exportação com solicitante e autorizador');
+falha('relatorio.exportar', { de: mes, ate: mes }, tc3, 'PERMISSAO');
+assert.ok(ok('relatorio.exportar', { de: mes, ate: mes }, tg).linhas.length >= 1);
+passo('painel: escopo por perfil, tipos e motivos, alçadas, aprovadores; exportação só para a gestão');
 
 // --- alertas de erro crítico
 const emailsAntes = estado.emails.filter(e => /Erro crítico/.test(e.subject)).length;
@@ -336,6 +338,11 @@ ok('monitor.resolverAlerta', { id: alTeste.id }, tm);
 assert.ok(!ok('monitor.status', {}, tm).alertas.some(a => a.id === alTeste.id));
 assert.strictEqual(ctx.diagnosticarErro_('backend', 'x', 'Aba "Alertas" não encontrada. Rode a função setup()', '').tipo, 'Aba da planilha faltando');
 assert.strictEqual(ctx.diagnosticarErro_('backend', 'x', 'ReferenceError: RegrasPagamento is not defined', '').tipo, 'Arquivo de regras ausente no Apps Script');
+assert.strictEqual(ctx.diagnosticarErro_('backend', 'x', 'Lock timeout: another process was holding the lock for too long', '').tipo, 'Sistema ocupado (acessos simultâneos)');
+assert.notStrictEqual(ctx.diagnosticarErro_('backend', 'x', 'Request blocked by the server', '').tipo, 'Sistema ocupado (acessos simultâneos)');
+vm.runInContext("MEMO_ = {}; atualizar_('Alertas', buscar_('Alertas', '" + alTeste.id + "'), { resolvido_em: '2020-01-01T00:00:00.000Z' }); MEMO_ = {}; limparAlertasResolvidos_(); MEMO_ = {};", ctx);
+assert.ok(!ctx.buscar_('Alertas', alTeste.id), 'alerta resolvido há mais de 30 dias é apagado');
+assert.ok(ctx.buscar_('Alertas', alFront.id), 'alerta em aberto continua');
 passo('alertas: e-mail e notificação ao master com tipo, local e como resolver; sem repetir o mesmo erro; resolver no Monitor');
 
 console.info('\nTodos os testes passaram.');

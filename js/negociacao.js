@@ -10,8 +10,14 @@
  */
 import { esc, toast } from './core.js';
 
-const R = window.RegrasPagamento;
-const U = R.util;
+// As regras são lidas na hora de usar: se o arquivo não carregar, o resto do app continua abrindo.
+let R = null;
+let U = null;
+function carregarRegras() {
+  R = window.RegrasPagamento || null;
+  U = R ? R.util : null;
+  return !!R;
+}
 const CAMPOS_ENTRADA = ['valorEntrada', 'e1Valor', 'e1Forma', 'e1Parc', 'temE2', 'e2Valor', 'e2Forma', 'e2Parc', 'temR', 'rForma', 'rData', 'rParc'];
 const CAMPOS_SINAL = ['sDia', 'sMes', 'sAno', 'sParc', 'sdParc', 'sdManual', 'sdData', 'sValor', 'sdValor', 'desc', 'sForma', 'sdForma'];
 const CHECKS = ['temE2', 'temR', 'sdManual'];
@@ -105,6 +111,7 @@ function marcacao() {
  * Retorna { obter(), atualizarContexto(ctx) }.
  */
 export function montarNegociacao(raiz, painel, { config, contexto, aoMudar }) {
+  if (!carregarRegras()) throw new Error('As regras de comercialização não carregaram. Atualize a página.');
   raiz.innerHTML = marcacao();
   const q = id => raiz.querySelector('#ng-' + id);
   let ctx = contexto || {};
@@ -419,8 +426,8 @@ export function montarNegociacao(raiz, painel, { config, contexto, aoMudar }) {
 
 /** Bloco do detalhe da solicitação: cotas, cronograma e regras, recalculados a partir da negociação salva. */
 export function resumoNegociacao(s, config) {
-  if (!s.negociacao || !window.RegrasPagamento) return '';
-  const av = R.avaliarVenda(s.negociacao, config);
+  if (!s.negociacao || !carregarRegras()) return '';
+  const av = R.avaliarVenda(s.negociacao, s.negociacao.cfg || config);
   const cotasHtml = av.cotas.map((f, i) => {
     const r = av.porCota[i];
     return `<div style="margin-top:${i ? 18 : 0}px"><div class="titulo-papel" style="margin-bottom:8px">Cota ${i + 1} · ${esc(f.emp)} · ${U.reais(f.valorCota)}</div>

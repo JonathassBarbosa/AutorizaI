@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.6.0',
+  VERSAO: '1.6.1',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -24,6 +24,7 @@ const CONFIG = {
   LOGIN_TENTATIVAS: 5,       // tentativas erradas antes de bloquear por 15 min
   ALERTA_EMAILS_DIA: 20,     // e-mails de alerta de erro crítico por dia (a conta Gmail envia ~100 e-mails/dia no total)
   ALERTA_REPETIR_MIN: 30,    // o mesmo erro só gera novo e-mail depois deste intervalo
+  ALERTA_MANTER_DIAS: 30,    // alertas resolvidos são apagados pela rotina diária depois deste prazo
 };
 
 // Hierarquia: Diretoria → Superintendente → Regional → Gerente de Sala → Consultor de Vendas → Assistente de Contratos
@@ -123,7 +124,7 @@ const ROTAS = {
   'regras.contexto': { silenciosa: true, fn: contextoSala_ },
 
   'relatorio.obter': { fn: relatorio_ },
-  'relatorio.exportar': { escrita: true, fn: exportarRelatorio_ },
+  'relatorio.exportar': { escrita: true, perfis: ['gerente', 'regional', 'superintendente', 'diretor', 'master'], fn: exportarRelatorio_ },
 
   'notificacoes.listar': { silenciosa: true, trocaPendente: true, fn: listarNotificacoes_ },
   'notificacoes.marcarLidas': { escrita: true, silenciosa: true, fn: marcarNotificacoesLidas_ },
@@ -713,7 +714,8 @@ function criarSolicitacao_(d, u) {
     };
     if (aval.ciencia.length) campos['Choque de parcelas (aceite do cliente)'] = aval.ciencia.map(g => g.titulo).join('; ').slice(0, 300);
     extra = {
-      negociacao: JSON.stringify(neg),
+      // As regras usadas ficam no pedido: o detalhe mostra os mesmos valores mesmo se o master mudar as regras depois.
+      negociacao: JSON.stringify(Object.assign({}, neg, { cfg: cfg })),
       regras: JSON.stringify(aval.gatilhos.concat(aval.ciencia).map(g => ({ id: g.id, titulo: g.titulo, det: g.det, acao: g.acao, cota: g.cota }))),
       aceite_cliente: aval.ciencia.length ? 'true' : '',
     };
@@ -1604,7 +1606,7 @@ function diagnosticarErro_(origem, acao, mensagem, local) {
       'O Google limita e-mails e chamadas por dia na conta. O serviço volta sozinho em até 24 h. Se repetir, reduza os e-mails automáticos ou use uma conta Google Workspace.'],
     [/Exceeded maximum execution time|tempo m[aá]ximo de execu/i, 'Tempo limite do Apps Script',
       'A planilha está pesada para responder. No Monitor, use "Limpar logs" e confira se a rotina diária (manutencao) está ativa em Acionadores no editor do Apps Script.'],
-    [/Lock|trava|ocupado/i, 'Sistema ocupado (acessos simultâneos)',
+    [/\block\b|trava|ocupado/i, 'Sistema ocupado (acessos simultâneos)',
       'Muitas gravações ao mesmo tempo. Normalmente passa sozinho; se repetir com frequência, avise quem mantém o sistema.'],
     [/Service Spreadsheets|Spreadsheet|planilha.*(n[aã]o|indispon)|Document .* is missing|could not find/i, 'Planilha indisponível',
       'Confira se a planilha "GAV Autorizações" existe, não foi movida para a lixeira e se a conta dona do script ainda tem acesso. Se trocou a planilha, rode setup() a partir dela.'],
@@ -1693,6 +1695,24 @@ function alertarErro_(origem, acao, usuario, mensagem, local) {
       'Abrir o Monitor', CONFIG.APP_URL + link));
   } finally {
     ALERTANDO_ = false;
+  }
+}
+
+/** Apaga alertas resolvidos há mais de ALERTA_MANTER_DIAS; os abertos ficam sempre. */
+function limparAlertasResolvidos_() {
+  const sh = ss_().getSheetByName('Alertas');
+  if (!sh || sh.getLastRow() < 2) return;
+  const cab = ABAS.Alertas;
+  const iRes = cab.indexOf('resolvido'), iEm = cab.indexOf('resolvido_em');
+  const limite = new Date(Date.now() - CONFIG.ALERTA_MANTER_DIAS * 864e5);
+  const valores = sh.getRange(2, 1, sh.getLastRow() - 1, cab.length).getValues();
+  const manter = valores.filter(r => celula_(r[iRes]) !== 'true' || !(new Date(celula_(r[iEm])) < limite));
+  if (manter.length === valores.length) return;
+  sh.deleteRows(2, valores.length);
+  if (manter.length) {
+    const rg = sh.getRange(2, 1, manter.length, cab.length);
+    rg.setNumberFormat('@');
+    rg.setValues(manter.map(r => r.map(celula_)));
   }
 }
 
@@ -1940,6 +1960,7 @@ function manutencao() {
         rg.setValues(manter.map(r => r.map(celula_)));
       }
     }
+    limparAlertasResolvidos_();
   } finally {
     trava.releaseLock();
   }
