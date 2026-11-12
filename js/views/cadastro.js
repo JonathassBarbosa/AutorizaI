@@ -1,5 +1,5 @@
 import { html, api, icone, dadosDoForm, PERFIS, porHierarquia } from '../core.js';
-import { assinatura, processando } from '../marcas.js';
+import { marcaApp, processando } from '../marcas.js';
 import { mascaraCelular, celularValido } from '../whatsapp.js';
 
 const PERFIS_DE_SALA = ['gerente', 'consultor', 'assistente'];
@@ -30,14 +30,14 @@ export default {
     return html`
       <div class="tela-auth">
         <section class="auth-marca">
-          ${assinatura({ classe: 'grande' })}
+          ${marcaApp({ classe: 'grande' })}
           <div><h2>Peça seu <em>acesso</em>.</h2>
             <p>Escolha a função que você ocupa. O master confere e libera o acesso; você recebe a confirmação por e-mail.</p></div>
-          <small>© ${new Date().getFullYear()} GAV Resorts</small>
+          <small>Uso interno · acesso restrito</small>
         </section>
         <section class="auth-form">
           <div class="caixa-auth" id="caixa-cadastro">
-            <div class="auth-logo-mobile">${assinatura({ classe: 'grande' })}</div>
+            <div class="auth-logo-mobile">${marcaApp({ classe: 'grande' })}</div>
             <h1>Criar conta</h1>
             <p style="color:var(--muted);margin:4px 0 22px">Preencha seus dados para pedir acesso.</p>
             <form id="form-cadastro" novalidate>
@@ -106,7 +106,7 @@ export default {
       delete d.confirmar;
       try {
         await processando('Enviando cadastro…', () => api('cadastro.solicitar', d));
-        el.querySelector('#caixa-cadastro').innerHTML = html`<div class="auth-logo-mobile">${assinatura({ classe: 'grande' })}</div>${telaEnviado()}`.toString();
+        el.querySelector('#caixa-cadastro').innerHTML = html`<div class="auth-logo-mobile">${marcaApp({ classe: 'grande' })}</div>${telaEnviado()}`.toString();
       } catch (e) { erro(e.message); }
     });
   },

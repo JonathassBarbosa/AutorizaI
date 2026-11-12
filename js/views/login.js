@@ -1,5 +1,5 @@
 import { html, api, icone, dadosDoForm, ApiErro } from '../core.js';
-import { assinatura, processando } from '../marcas.js';
+import { marcaApp, processando } from '../marcas.js';
 
 export default {
   telaCheia: true,
@@ -7,16 +7,16 @@ export default {
     return html`
       <div class="tela-auth">
         <section class="auth-marca">
-          ${assinatura({ classe: 'grande' })}
+          ${marcaApp({ classe: 'grande' })}
           <div>
             <h2>Autorizações de vendas <em>fora da regra</em>, com rastreabilidade de ponta a ponta.</h2>
             <p>Solicite, aprove pela alçada certa e acompanhe cada exceção por sala, regional e diretoria.</p>
           </div>
-          <small>© ${new Date().getFullYear()} GAV Resorts</small>
+          <small>Uso interno · acesso restrito</small>
         </section>
         <section class="auth-form">
           <form id="form-login" novalidate>
-            <div class="auth-logo-mobile">${assinatura({ classe: 'grande' })}</div>
+            <div class="auth-logo-mobile">${marcaApp({ classe: 'grande' })}</div>
             <h1>Entrar</h1>
             <p>Use seu e-mail e senha de acesso.</p>
             <div id="erro-login"></div>

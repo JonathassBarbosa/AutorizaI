@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "GAV Autorizações",
-  "short_name": "GAV Autoriza",
-  "description": "Autorizações de vendas fora da regra — GAV Resorts",
+  "name": "AutorizaI",
+  "short_name": "AutorizaI",
+  "description": "AutorizaI — sistema interno de autorizações",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",

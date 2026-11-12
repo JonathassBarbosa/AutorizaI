@@ -1,7 +1,6 @@
-/* GAV Hotéis e Resorts — Autorizações
-   Identidade (manual GAV MARCAS): Azul GAV #0B306B (Pantone 294 C), azul de apoio #053F9B (293 C),
-   off-white #FEF9E0 (P 1-2 C) e areia #BF8F64 / #A57A4C (2313 C / 6010 C).
-   Tipografia: Fraunces (títulos) e Motiva Sans (textos; Figtree como substituta web gratuita). */
+/* AutorizaI — estilos do app.
+   Paleta: azul #0B306B, azul de apoio #053F9B, off-white #FEF9E0 e areia #BF8F64 / #A57A4C.
+   Tipografia: Fraunces (títulos) e Figtree (textos). */
 
 :root {
   --navy-950: #071F47;
@@ -630,3 +629,13 @@ dl.dados dd { margin: 4px 0 0; font-weight: 500; word-break: break-word; }
 /* Metas das salas */
 .tabela-metas .entrada { height: 40px; max-width: 140px; }
 .tabela-metas td { padding-top: 8px; padding-bottom: 8px; }
+
+/* Marca pública do app (login e abertura): rosa dos ventos + "AutorizaI" */
+.marca-app { display: inline-flex; flex-direction: column; align-items: center; gap: .7em; color: var(--offwhite); line-height: 1; user-select: none; font-size: 10px; }
+.marca-app .marca-rosa { width: 5.6em; height: 5.6em; }
+.marca-app-nome { font-family: var(--font-display); font-weight: 600; font-size: 2.6em; letter-spacing: .01em; }
+.marca-app.grande { font-size: 13px; }
+.abertura .marca-app { font-size: 17px; }
+.marca-app.animado .marca-app-nome { opacity: 0; animation: marca-app-nome .8s cubic-bezier(.2, .7, .2, 1) .9s forwards; }
+@keyframes marca-app-nome { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .marca-app.animado .marca-app-nome { opacity: 1; animation: none; } }
