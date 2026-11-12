@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.6.1',
+  VERSAO: '1.7.0',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -54,7 +54,7 @@ const ABAS = {
     'empreendimento', 'valor', 'campos', 'justificativa', 'status', 'alcada', 'alcada_motivo', 'aprovador_id',
     'aprovador_nome', 'resposta', 'respondido_em', 'desfecho', 'contrato', 'desfecho_justificativa', 'desfecho_por',
     'desfecho_em', 'criado_em', 'atualizado_em', 'id_casal', 'negociacao', 'regras', 'aceite_cliente'],
-  VendasMes: ['id', 'sala_id', 'mes', 'total_vendas', 'atualizado_por', 'atualizado_em'],
+  VendasMes: ['id', 'sala_id', 'mes', 'total_vendas', 'atualizado_por', 'atualizado_em', 'meta_vendas', 'limite_pct'],
   Notificacoes: ['id', 'usuario_id', 'titulo', 'mensagem', 'link', 'lida', 'criado_em'],
   Sessoes: ['token_hash', 'usuario_id', 'criado_em', 'expira_em', 'ativo'],
   Auditoria: ['id', 'data', 'usuario_id', 'usuario_nome', 'acao', 'entidade', 'entidade_id', 'detalhes'],
@@ -96,6 +96,8 @@ const ROTAS = {
 
   'dashboard.obter': { fn: dashboard_ },
   'vendas.salvar': { escrita: true, perfis: ['assistente', 'gerente', 'regional', 'superintendente', 'master'], fn: salvarVendasMes_ },
+  'metas.obter': { perfis: ['master'], fn: obterMetas_ },
+  'metas.salvar': { escrita: true, perfis: ['master'], fn: salvarMetas_ },
 
   'solicitacoes.listar': { fn: listarSolicitacoes_ },
   'solicitacoes.obter': { fn: obterSolicitacao_ },
@@ -555,24 +557,41 @@ function destinatariosDaAlcada_(salaId, alcada) {
 function calcularAlcada_(tipo, salaId, motivoBase, sobeSala) {
   let alcada = ALCADAS.indexOf(tipo.alcada) >= 0 ? tipo.alcada : 'gerente';
   let motivo = motivoBase || 'Definida pelo tipo de exceção';
-  const sala = estrutura_().sala[salaId];
-  const limite = Number(sala && sala.limite_pct || 0);
-  if (sobeSala !== false && limite > 0 && alcada !== ALCADAS[ALCADAS.length - 1]) {
+  if (sobeSala !== false && alcada !== ALCADAS[ALCADAS.length - 1]) {
     const ind = indicadorSala_(salaId, mesAtual_());
-    if (ind.vendas > 0 && ind.pct >= limite) {
+    if (ind.acima) {
       alcada = ALCADAS[ALCADAS.indexOf(alcada) + 1];
-      motivo = (motivoBase ? motivoBase + ' · ' : '') + 'Elevada: a sala está com ' + ind.pct.toFixed(1) + '% de exceções no mês (limite ' + limite + '%)';
+      motivo = (motivoBase ? motivoBase + ' · ' : '') + 'Elevada: a sala já tem ' + ind.excecoes + ' exceção(ões) no mês, ' +
+        ind.pct.toFixed(1) + '% ' + (ind.base_tipo === 'meta' ? 'da meta de ' + ind.meta + ' vendas' : 'das ' + ind.vendas + ' vendas lançadas') +
+        ' (limite ' + ind.limite + '%)';
     }
   }
   return { alcada: alcada, motivo: motivo };
 }
 
+/**
+ * Exceções da sala no mês e o limite que vale.
+ * Com meta do mês cadastrada, o % é calculado sobre a meta (ex.: meta 100 e limite 10% → até 10 exceções).
+ * Sem meta, vale o jeito antigo: % sobre as vendas lançadas. O % do mês, se vazio, usa o limite padrão da sala.
+ */
 function indicadorSala_(salaId, mes) {
   const vm = ler_('VendasMes').find(v => v.sala_id === salaId && v.mes === mes);
+  const sala = estrutura_().sala[salaId];
   const vendas = Number(vm ? vm.total_vendas : 0) || 0;
+  const meta = Number(vm ? vm.meta_vendas : 0) || 0;
+  const limiteMes = vm && vm.limite_pct !== '' ? Number(vm.limite_pct) : NaN;
+  const limitePadrao = Number(sala && sala.limite_pct || 0);
+  const limite = isNaN(limiteMes) ? limitePadrao : limiteMes;
   const excecoes = ler_('Solicitacoes').filter(s =>
     s.sala_id === salaId && mesDe_(s.criado_em) === mes && s.status === 'aprovada' && s.desfecho !== 'sem_venda').length;
-  return { vendas: vendas, excecoes: excecoes, pct: vendas > 0 ? (excecoes * 100) / vendas : 0 };
+  const base = meta > 0 ? meta : vendas;
+  const pct = base > 0 ? (excecoes * 100) / base : 0;
+  return {
+    vendas: vendas, meta: meta, excecoes: excecoes, pct: pct, limite: limite, limite_padrao: limitePadrao,
+    limite_do_mes: !isNaN(limiteMes), base_tipo: meta > 0 ? 'meta' : 'vendas',
+    max_excecoes: base > 0 && limite > 0 ? Math.round(base * limite) / 100 : null,
+    acima: limite > 0 && base > 0 && pct >= limite,
+  };
 }
 
 function vinculoTexto_(u) {
@@ -880,8 +899,9 @@ function contextoSala_(d, u) {
   const vagos = {};
   ALCADAS.forEach(n => { vagos[n] = !aprovadoresDoNivel_(salaId, n).filter(x => x.id !== u.id).length; });
   return {
-    sala_id: salaId, pct: Math.round(ind.pct * 10) / 10, limite: Number(sala && sala.limite_pct || 0),
-    vendas: ind.vendas, vagos: vagos,
+    // "vendas" é a base do % (a meta do mês, ou as vendas lançadas quando não há meta)
+    sala_id: salaId, pct: Math.round(ind.pct * 10) / 10, limite: ind.limite,
+    vendas: ind.base_tipo === 'meta' ? ind.meta : ind.vendas, vagos: vagos,
   };
 }
 
@@ -917,8 +937,9 @@ function dashboard_(d, u) {
     const ind = indicadorSala_(id, mes);
     const daSala = sols.filter(s => s.sala_id === id);
     return {
-      id: id, nome: e.sala[id].nome, regional: c.reg ? c.reg.nome : '', limite_pct: Number(e.sala[id].limite_pct || 0),
-      vendas: ind.vendas, excecoes: ind.excecoes, pct: Math.round(ind.pct * 10) / 10,
+      id: id, nome: e.sala[id].nome, regional: c.reg ? c.reg.nome : '', limite_pct: ind.limite,
+      vendas: ind.vendas, meta: ind.meta, base_tipo: ind.base_tipo, max_excecoes: ind.max_excecoes,
+      excecoes: ind.excecoes, pct: Math.round(ind.pct * 10) / 10,
       total: daSala.length, pendentes: daSala.filter(s => s.status === 'pendente').length,
       negadas: daSala.filter(s => s.status === 'negada').length,
     };
@@ -961,6 +982,71 @@ function salvarVendasMes_(d, u) {
   else inserir_('VendasMes', Object.assign({ id: novoId_('V') }, dados));
   auditar_(u, 'vendas do mês', 'sala', d.sala_id, d.mes + ': ' + total);
   return indicadorSala_(d.sala_id, d.mes);
+}
+
+// ============================================================================
+// METAS DO MÊS (o master define, por sala e mês, a meta de vendas e o % máximo fora do padrão)
+// ============================================================================
+function obterMetas_(d) {
+  const ano = /^\d{4}$/.test(String(d.ano || '')) ? String(d.ano) : mesAtual_().slice(0, 4);
+  const e = estrutura_();
+  const linhas = ler_('VendasMes').filter(v => v.mes.slice(0, 4) === ano);
+  const salas = Object.keys(e.sala).map(k => e.sala[k]).filter(s => bool_(s.ativo)).map(s => {
+    const c = cadeiaSala_(s.id);
+    const meses = {};
+    linhas.filter(v => v.sala_id === s.id).forEach(v => {
+      const ind = indicadorSala_(s.id, v.mes);
+      meses[v.mes] = {
+        meta: v.meta_vendas === '' ? null : Number(v.meta_vendas), limite_pct: v.limite_pct === '' ? null : Number(v.limite_pct),
+        vendas: Number(v.total_vendas || 0) || 0, excecoes: ind.excecoes,
+      };
+    });
+    return { id: s.id, nome: s.nome, regional: c.reg ? c.reg.nome : '', limite_padrao: Number(s.limite_pct || 0), meses: meses };
+  }).sort((a, b) => a.nome.localeCompare(b.nome));
+  // Exceções dos meses sem linha na aba (para mostrar o realizado mesmo sem meta)
+  salas.forEach(s => {
+    for (let m = 1; m <= 12; m++) {
+      const mes = ano + '-' + ('0' + m).slice(-2);
+      if (!s.meses[mes]) {
+        const exc = indicadorSala_(s.id, mes).excecoes;
+        if (exc) s.meses[mes] = { meta: null, limite_pct: null, vendas: 0, excecoes: exc };
+      }
+    }
+  });
+  return { ano: ano, salas: salas };
+}
+
+function salvarMetas_(d, u) {
+  const itens = Array.isArray(d.itens) ? d.itens : [];
+  if (!itens.length) throw falha_('Nenhuma meta para salvar.');
+  if (itens.length > 400) throw falha_('Salve no máximo 400 metas por vez.');
+  const e = estrutura_();
+  const numero = (v, rotulo, max, inteiro) => {
+    if (v === '' || v === null || v === undefined) return '';
+    const n = Number(String(v).replace(',', '.'));
+    if (isNaN(n) || n < 0 || n > max || (inteiro && Math.floor(n) !== n)) throw falha_(rotulo);
+    return n;
+  };
+  let n = 0;
+  itens.forEach(it => {
+    const sala = e.sala[it.sala_id];
+    if (!sala) throw falha_('Sala inválida.');
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(it.mes || ''))) throw falha_('Mês inválido.');
+    const meta = numero(it.meta_vendas, 'Meta de ' + sala.nome + ': use um número inteiro de vendas.', 100000, true);
+    const limite = numero(it.limite_pct, '% fora do padrão de ' + sala.nome + ': use um valor entre 0 e 100.', 100, false);
+    const atual = ler_('VendasMes').find(v => v.sala_id === it.sala_id && v.mes === it.mes);
+    if (!atual && meta === '' && limite === '') return;
+    const dados = { meta_vendas: meta, limite_pct: limite, atualizado_por: u.nome, atualizado_em: agora_() };
+    if (atual) {
+      if (String(atual.meta_vendas) === String(meta) && String(atual.limite_pct) === String(limite)) return;
+      atualizar_('VendasMes', atual, dados);
+    } else {
+      inserir_('VendasMes', Object.assign({ id: novoId_('V'), sala_id: it.sala_id, mes: it.mes, total_vendas: '' }, dados));
+    }
+    n++;
+  });
+  auditar_(u, 'metas do mês', 'sistema', 'metas', n + ' meta(s) salva(s): ' + itens.map(i => i.mes).filter((m, i, a) => a.indexOf(m) === i).join(', '));
+  return Object.assign({ salvas: n }, obterMetas_({ ano: String(itens[0].mes).slice(0, 4) }));
 }
 
 // ============================================================================

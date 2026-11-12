@@ -5,13 +5,13 @@ try {
   // Sem internet na instalação: o push volta a funcionar na próxima atualização.
 }
 
-const CACHE = 'gav-autorizacoes-v7';
+const CACHE = 'gav-autorizacoes-v8';
 const ARQUIVOS = [
   './', 'index.html', 'config.js', 'manifest.webmanifest', 'css/app.css',
   'js/core.js', 'js/app.js', 'js/marcas.js', 'js/marcas-dados.js', 'js/whatsapp.js', 'js/qrcode.js', 'js/push.js', 'js/monitor-client.js', 'js/regras-pagamento.js', 'js/negociacao.js',
   'js/views/login.js', 'js/views/cadastro.js', 'js/views/recuperar.js', 'js/views/trocar-senha.js', 'js/views/inicio.js', 'js/views/solicitacoes.js',
   'js/views/detalhe.js', 'js/views/nova.js', 'js/views/verificar.js', 'js/views/estrutura.js',
-  'js/views/usuarios.js', 'js/views/tipos.js', 'js/views/monitor.js', 'js/views/perfil.js', 'js/views/painel.js', 'js/views/regras.js',
+  'js/views/usuarios.js', 'js/views/tipos.js', 'js/views/monitor.js', 'js/views/perfil.js', 'js/views/painel.js', 'js/views/regras.js', 'js/views/metas.js',
   'img/icon-192.png', 'img/icon-512.png', 'apple-touch-icon.png',
 ];
 

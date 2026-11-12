@@ -142,6 +142,7 @@ assert.match(s3.alcada_motivo, /Elevada/);
 ok('solicitacoes.cancelar', { id: s3.id }, tc);
 passo('sala acima do limite de exceções sobe a alçada automaticamente');
 
+
 // --- dashboards por escopo
 const dm = ok('dashboard.obter', {}, tm);
 assert.strictEqual(dm.kpis.total, 3);
@@ -150,6 +151,29 @@ assert.strictEqual(ok('dashboard.obter', {}, tr).salas.length, 2);
 assert.strictEqual(ok('dashboard.obter', {}, tg).salas.length, 1);
 assert.strictEqual(ok('dashboard.obter', {}, tc2).kpis.total, 0);
 passo('dashboards respeitam o escopo de cada perfil');
+
+// --- meta do mês: o % passa a ser sobre a meta, com limite próprio do mês
+falha('metas.salvar', { itens: [{ sala_id: sala.id, mes, meta_vendas: 100, limite_pct: 5 }] }, tg, 'PERMISSAO');
+falha('metas.salvar', { itens: [{ sala_id: sala.id, mes, meta_vendas: 10.5, limite_pct: 5 }] }, tm);
+falha('metas.salvar', { itens: [{ sala_id: sala.id, mes, meta_vendas: 100, limite_pct: 150 }] }, tm);
+let metas = ok('metas.salvar', { itens: [{ sala_id: sala.id, mes, meta_vendas: 100, limite_pct: 5 }] }, tm);
+assert.strictEqual(metas.salvas, 1);
+assert.strictEqual(metas.salas.find(x => x.id === sala.id).meses[mes].meta, 100);
+assert.strictEqual(metas.salas.find(x => x.id === sala.id).meses[mes].vendas, 10, 'a meta não apaga as vendas lançadas');
+const s3b = ok('solicitacoes.criar', { tipo_id: tipoGer.id, id_casal: '1234543', campos, justificativa: 'Teste com meta do mês.' }, tc);
+assert.strictEqual(s3b.alcada, 'gerente', '1 exceção sobre meta 100 (1%) fica abaixo de 5%');
+ok('solicitacoes.cancelar', { id: s3b.id }, tc);
+ok('metas.salvar', { itens: [{ sala_id: sala.id, mes, meta_vendas: 20, limite_pct: 5 }] }, tm);
+const s3c = ok('solicitacoes.criar', { tipo_id: tipoGer.id, id_casal: '1234544', campos, justificativa: 'Teste com meta do mês.' }, tc);
+assert.strictEqual(s3c.alcada, 'regional', '1 exceção sobre meta 20 (5%) atinge o limite de 5%');
+assert.match(s3c.alcada_motivo, /meta de 20 vendas/);
+ok('solicitacoes.cancelar', { id: s3c.id }, tc);
+const dashM = ok('dashboard.obter', { mes }, tm).salas.find(x => x.id === sala.id);
+assert.strictEqual(dashM.meta, 20);
+assert.strictEqual(dashM.max_excecoes, 1);
+ok('metas.salvar', { itens: [{ sala_id: sala.id, mes, meta_vendas: '', limite_pct: '' }] }, tm);
+assert.strictEqual(ok('dashboard.obter', { mes }, tm).salas.find(x => x.id === sala.id).limite_pct, 10, 'sem % no mês volta ao limite padrão da sala');
+passo('metas do mês: o master define meta e % por sala; o limite passa a contar sobre a meta');
 
 // --- monitor
 const erro = falha('monitor.testarErro', {}, tm, 'ERRO');

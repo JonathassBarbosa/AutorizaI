@@ -35,6 +35,8 @@ gav-autorizacoes-app/
 
 **Alçadas:** cada tipo de exceção define o nível mínimo (gerente, regional ou superintendente). Níveis acima também podem aprovar. Se o cargo estiver vago na sala, o pedido sobe automaticamente. Se a sala passar do **limite % de exceções do mês**, as novas exceções sobem um nível.
 
+**Metas das salas:** em **Metas das salas**, o master define para cada sala e mês a **meta de vendas** e o **% máximo fora do padrão**. Ex.: meta 100 e 10% = até 10 exceções aprovadas no mês; da 11ª em diante, a alçada sobe um nível. Mês sem meta usa as vendas lançadas no Início; mês sem % usa o limite padrão da sala (Estrutura). Há atalhos para copiar o mês anterior e aplicar o mesmo % a todas as salas.
+
 **% de exceções da sala** = exceções aprovadas (que não terminaram "sem venda") ÷ total de vendas do mês. O total de vendas é lançado no painel inicial (botão **Vendas** de cada sala).
 
 ---
@@ -83,7 +85,7 @@ gav-autorizacoes-app/
 
 1. Abra o site, entre com `MASTER_EMAIL` e a senha provisória, e crie sua senha.
 2. **Usuários:** cadastre primeiro os superintendentes e os regionais.
-3. **Estrutura:** crie a diretoria, as regionais (escolha a diretoria, o superintendente e o regional de cada uma) e as salas (defina o limite %).
+3. **Estrutura:** crie a diretoria, as regionais (escolha a diretoria, o superintendente e o regional de cada uma) e as salas (limite % padrão). Depois, em **Metas das salas**, lance a meta e o % de cada mês.
 4. **Usuários:** cadastre gerentes, assistentes de contratos e consultores, cada um com sua sala.
    - A cada usuário criado aparece a **senha provisória** e o botão **Copiar mensagem**, que já vem com endereço, e-mail e senha para enviar pelo WhatsApp.
 5. **Tipos de exceção:** revise os 5 tipos padrão, ajuste a alçada e os campos que o consultor precisa preencher.

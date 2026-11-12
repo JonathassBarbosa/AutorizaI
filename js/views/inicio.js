@@ -101,15 +101,15 @@ export default {
         <div class="grade grade-lateral">
           <div class="card">
             <div class="card-topo">
-              <div><h3>Exceções por sala</h3><small>Barra = % de exceções sobre as vendas do mês · traço dourado = limite da sala</small></div>
+              <div><h3>Exceções por sala</h3><small>Barra = % de exceções sobre a meta do mês (ou sobre as vendas lançadas, sem meta) · traço dourado = limite</small></div>
             </div>
             ${d.salas.length ? html`<div class="tabela-wrap"><table class="tabela cartoes">
-              <thead><tr><th>Sala</th><th class="num">Vendas</th><th class="num">Exceções</th><th style="min-width:180px">% / limite</th><th class="num">Pend.</th>${d.pode_editar_vendas ? html`<th></th>` : ''}</tr></thead>
+              <thead><tr><th>Sala</th><th class="num">Vendas / meta</th><th class="num">Exceções</th><th style="min-width:180px">% / limite</th><th class="num">Pend.</th>${d.pode_editar_vendas ? html`<th></th>` : ''}</tr></thead>
               <tbody>${d.salas.map(s => html`<tr>
                 <td class="cel-cheia"><div class="forte">${s.nome}</div><div class="secundario">${s.regional || 'Sem regional'}</div></td>
-                <td class="num" data-rotulo="Vendas">${s.vendas || html`<span class="secundario">—</span>`}</td>
-                <td class="num" data-rotulo="Exceções">${s.excecoes}</td>
-                <td class="cel-cheia">${barraSala(s)}<div class="barra-legenda"><span>${s.vendas ? `${s.pct}%` : 'sem vendas lançadas'}</span><span>${s.limite_pct ? `limite ${s.limite_pct}%` : 'sem limite'}</span></div></td>
+                <td class="num" data-rotulo="Vendas / meta">${s.vendas || html`<span class="secundario">—</span>`}${s.meta ? html`<div class="secundario">meta ${s.meta}</div>` : ''}</td>
+                <td class="num" data-rotulo="Exceções">${s.excecoes}${s.max_excecoes !== null ? html`<div class="secundario">máx. ${String(s.max_excecoes).replace('.', ',')}</div>` : ''}</td>
+                <td class="cel-cheia">${barraSala(s)}<div class="barra-legenda"><span>${s.meta || s.vendas ? `${s.pct}%${s.base_tipo === 'meta' ? ' da meta' : ''}` : 'sem meta nem vendas lançadas'}</span><span>${s.limite_pct ? `limite ${s.limite_pct}%` : 'sem limite'}</span></div></td>
                 <td class="num" data-rotulo="Pendentes">${s.pendentes ? html`<span class="selo selo-ambar sem-ponto">${s.pendentes}</span>` : '0'}</td>
                 ${d.pode_editar_vendas ? html`<td class="num"><button class="btn btn-claro btn-pequeno" data-vendas="${s.id}" data-nome="${s.nome}" data-valor="${s.vendas}">Vendas</button></td>` : ''}
               </tr>`)}</tbody></table></div>`

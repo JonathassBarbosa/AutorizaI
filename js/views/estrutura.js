@@ -99,9 +99,9 @@ export default {
       } else {
         corpo = html`<div class="campo"><label>Nome da sala de vendas</label><input class="entrada" name="nome" value="${reg.nome || ''}" required></div>
           <div class="campo"><label>Regional</label><select class="entrada" name="regional_id">${opcoes(est.regionais, reg.regional_id, '— sem regional —')}</select></div>
-          <div class="campo"><label>Limite de exceções no mês (%)</label>
+          <div class="campo"><label>Limite padrão de exceções no mês (%)</label>
             <input class="entrada" name="limite_pct" type="number" min="0" max="100" step="0.5" value="${reg.limite_pct ?? 0}">
-            <small>Quando a sala atinge este percentual, novas exceções sobem um nível de alçada. 0 = sem limite.</small></div>
+            <small>Vale nos meses sem % definido em <a href="#/metas">Metas das salas</a>. Quando a sala atinge o limite, novas exceções sobem um nível de alçada. 0 = sem limite.</small></div>
           ${id ? html`<div class="aviso aviso-azul">${icone('usuarios')}<div>Gerentes de sala, consultores de vendas e assistentes de contratos são vinculados à sala no cadastro de <a href="#/usuarios">Usuários</a>.</div></div>` : ''}`;
       }
       const m = modal({
