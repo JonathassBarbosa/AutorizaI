@@ -23,6 +23,8 @@ const estado = novoDoZero ? { abas: {}, props: {} } : JSON.parse(fs.readFileSync
 const contexto = vm.createContext(Object.assign({ console }, criarServicos(estado)));
 
 function carregarCodigo() {
+  // No Apps Script, RegrasPagamento é um segundo arquivo do projeto; aqui roda no mesmo contexto.
+  vm.runInContext(fs.readFileSync(path.join(RAIZ, 'js', 'regras-pagamento.js'), 'utf8'), contexto, { filename: 'RegrasPagamento.gs' });
   let codigo = fs.readFileSync(ARQ_GS, 'utf8');
   codigo = codigo.replace(/MASTER_EMAIL: '[^']*'/, "MASTER_EMAIL: 'master@gav.dev'"); // no simulador o master é sempre master@gav.dev
   vm.runInContext(codigo, contexto, { filename: 'Code.gs' });

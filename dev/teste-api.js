@@ -10,6 +10,8 @@ const { criarServicos } = require('./gas-mock');
 
 const estado = { abas: {}, props: {} };
 const ctx = vm.createContext(Object.assign({ console: { log() {} } }, criarServicos(estado)));
+// No Apps Script, RegrasPagamento é um segundo arquivo do projeto; aqui roda no mesmo contexto.
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'regras-pagamento.js'), 'utf8'), ctx, { filename: 'RegrasPagamento.gs' });
 const codigo = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8')
   .replace(/MASTER_EMAIL: '[^']*'/, "MASTER_EMAIL: 'master@gav.dev'");
 vm.runInContext(codigo, ctx, { filename: 'Code.gs' });
@@ -240,5 +242,100 @@ assert.strictEqual(s5.cliente, 'ID Casal 1234542');
 assert.strictEqual(ok('solicitacoes.listar', { busca: '1234542' }, tc).total, 1);
 passo('ID Casal: identifica o cliente (sem nome e CPF) e entra na busca');
 passo('WhatsApp: celular obrigatório no cadastro; aprovador e solicitante com número no formato wa.me');
+
+// --- 1.6: alçada automática pelas regras de comercialização
+const con3 = novoUsuario('Marcos Muro Alto', 'con3@gav.dev', 'consultor', { sala_id: sala2.id });
+const tc3 = entrar(con3.email, con3.senha, 'Consultor3');
+const tipoAuto = ok('tipos.listar', {}, tc3).find(t => t.alcada === 'auto');
+assert.ok(tipoAuto, 'setup cria o tipo com alçada automática');
+const cfgRegras = ok('regras.obter', {}, tc3);
+assert.strictEqual(cfgRegras.config.params.diasReg, 150);
+assert.strictEqual(cfgRegras.editavel, false);
+const ctxSala = ok('regras.contexto', {}, tc3);
+assert.strictEqual(ctxSala.sala_id, sala2.id);
+assert.strictEqual(ctxSala.vagos.gerente, true, 'Muro Alto não tem gerente');
+assert.strictEqual(ctxSala.vagos.regional, false);
+const cotaBase = extra => Object.assign({
+  emp: 'SALINAS PARK RESORT', valorCota: 49900, e1Valor: 1330, e1Forma: 'PIX', e1Parc: 1, temE2: false,
+  temR: true, rForma: 'Boleto', rData: '2026-12-10', rParc: 2, sDia: 10, sMes: 1, sAno: 2027, sParc: 6, sdParc: 72,
+  sForma: 'Boleto', sdForma: 'Boleto',
+  sValor: 1, sdValor: 1, // valores do navegador são ignorados: o servidor recalcula
+}, extra || {});
+const pedidoAuto = (extraCota, extraNeg) => ({
+  tipo_id: tipoAuto.id, id_casal: '7654321', justificativa: 'Cliente pediu o sinal mais para frente.',
+  negociacao: Object.assign({ modelo: 'padrao', venda: '2026-11-11', aceite: false, cotas: [cotaBase(extraCota)] }, extraNeg || {}),
+});
+falha('solicitacoes.criar', pedidoAuto(), tc3, 'DENTRO_DA_REGRA');
+falha('solicitacoes.criar', pedidoAuto({ e1Valor: 800 }), tc3, 'BLOQUEADA');
+falha('solicitacoes.criar', pedidoAuto({ e1Valor: 500, temE2: true, e2Valor: 500, e2Forma: 'CartaoCredito', e2Parc: 2 }), tc3, 'BLOQUEADA');
+falha('solicitacoes.criar', pedidoAuto({ sDia: 5, sMes: 0, rParc: 2 }), tc3, 'ACEITE');
+const sa = ok('solicitacoes.criar', pedidoAuto({ rParc: 5, sMes: 4 }), tc3);
+assert.strictEqual(sa.alcada, 'regional', 'sinal em ~6 meses vai para o Regional');
+assert.match(sa.alcada_motivo, /^Regras: /);
+assert.strictEqual(sa.valor, 49900);
+assert.strictEqual(sa.empreendimento, 'SALINAS PARK RESORT');
+assert.deepStrictEqual(sa.regras.map(g => g.id).sort(), ['rest_gerente', 'sinal_reg']);
+assert.strictEqual(sa.aguardando[0].nome, 'Rafael Regional');
+const saDet = ok('solicitacoes.obter', { id: sa.id }, tr);
+assert.strictEqual(saDet.negociacao.cotas.length, 1);
+assert.strictEqual(saDet.negociacao.cotas[0].sValor, '1', 'guarda o que o consultor enviou; os valores certos são recalculados na tela');
+assert.strictEqual(saDet.pode_aprovar, true);
+const sb = ok('solicitacoes.criar', pedidoAuto({ sDia: 5, sMes: 0, e1Valor: 1000 }, { aceite: true }), tc3);
+assert.strictEqual(sb.alcada, 'gerente');
+assert.strictEqual(sb.aceite_cliente, true);
+ok('solicitacoes.responder', { id: sa.id, decisao: 'aprovada', resposta: 'Aprovado pelo regional.' }, tr);
+passo('alçada automática: dentro da regra não envia, proibido bloqueia, choque pede aceite, servidor recalcula e define o Regional');
+
+// --- regras editáveis pelo master
+falha('regras.salvar', { acoes: { sinal_reg: 'gerente' } }, tr, 'PERMISSAO');
+falha('regras.salvar', { params: { diasReg: 300 } }, tm);
+ok('regras.salvar', { params: cfgRegras.config.params, acoes: Object.assign({}, cfgRegras.config.acoes, { sinal_reg: 'superintendente' }) }, tm);
+const sc = ok('solicitacoes.criar', pedidoAuto({ rParc: 5, sMes: 4 }), tc3);
+assert.strictEqual(sc.alcada, 'superintendente');
+ok('solicitacoes.cancelar', { id: sc.id }, tc3);
+ok('regras.salvar', cfgRegras.config, tm);
+passo('regras: só o master edita, e a alçada passa a valer na hora');
+
+// --- painel e relatório por escopo
+const relM = ok('relatorio.obter', { de: mes, ate: mes }, tm);
+assert.ok(relM.kpis.total >= 8);
+assert.ok(relM.por_tipo.some(t => t.nome === 'Sinal após o prazo padrão'));
+assert.ok(relM.por_tipo.some(t => t.nome === tipoGer.nome));
+assert.strictEqual(relM.por_alcada.find(a => a.alcada === 'regional').aprovadas >= 1, true);
+assert.ok(relM.matriz.salas.length >= 2);
+assert.ok(relM.aprovadores.some(a => a.nome === 'Rafael Regional' && a.perfil === 'regional'));
+const relC = ok('relatorio.obter', { de: mes, ate: mes }, tc3);
+assert.strictEqual(relC.kpis.total, 3, 'consultor vê só as próprias');
+const relG = ok('relatorio.obter', { de: mes, ate: mes }, tg);
+assert.ok(relG.salas.every(s => s.id === sala.id), 'gerente vê só a sala dele');
+const exp = ok('relatorio.exportar', { de: mes, ate: mes }, tm);
+assert.ok(exp.colunas.indexOf('Solicitante') >= 0 && exp.colunas.indexOf('Autorizador') >= 0);
+const linhaA = exp.linhas.find(l => l[0] === sa.codigo);
+assert.strictEqual(linhaA[exp.colunas.indexOf('Solicitante')], 'Marcos Muro Alto');
+assert.strictEqual(linhaA[exp.colunas.indexOf('Autorizador')], 'Rafael Regional');
+assert.strictEqual(linhaA[exp.colunas.indexOf('Perfil do autorizador')], 'Regional');
+assert.strictEqual(ok('relatorio.exportar', { de: mes, ate: mes }, tc3).linhas.length, 3);
+passo('painel: escopo por perfil, tipos e motivos, alçadas, aprovadores; exportação com solicitante e autorizador');
+
+// --- alertas de erro crítico
+const emailsAntes = estado.emails.filter(e => /Erro crítico/.test(e.subject)).length;
+assert.ok(emailsAntes >= 1, 'o teste de erro já gerou um e-mail de alerta');
+falha('monitor.testarErro', {}, tm, 'ERRO');
+assert.strictEqual(estado.emails.filter(e => /Erro crítico/.test(e.subject)).length, emailsAntes, 'o mesmo erro não repete o e-mail em seguida');
+let st = ok('monitor.status', {}, tm);
+const alTeste = st.alertas.find(a => a.acao === 'monitor.testarErro');
+assert.ok(alTeste && Number(alTeste.ocorrencias) >= 2);
+assert.match(alTeste.solucao, /Testar erro/);
+assert.ok(ok('notificacoes.listar', {}, tm).itens.some(n => /Erro crítico/.test(n.titulo) && /alerta=/.test(n.link)));
+for (let i = 0; i < 3; i++) ok('monitor.erroFront', { mensagem: 'Failed to fetch dynamically imported module', arquivo: 'https://site/js/views/painel.js', linha: 1, rota: '#/painel' });
+st = ok('monitor.status', {}, tm);
+const alFront = st.alertas.find(a => a.origem === 'frontend');
+assert.ok(alFront, 'erro do navegador repetido 3x vira alerta');
+assert.strictEqual(alFront.tipo, 'Arquivo do app não carregou');
+ok('monitor.resolverAlerta', { id: alTeste.id }, tm);
+assert.ok(!ok('monitor.status', {}, tm).alertas.some(a => a.id === alTeste.id));
+assert.strictEqual(ctx.diagnosticarErro_('backend', 'x', 'Aba "Alertas" não encontrada. Rode a função setup()', '').tipo, 'Aba da planilha faltando');
+assert.strictEqual(ctx.diagnosticarErro_('backend', 'x', 'ReferenceError: RegrasPagamento is not defined', '').tipo, 'Arquivo de regras ausente no Apps Script');
+passo('alertas: e-mail e notificação ao master com tipo, local e como resolver; sem repetir o mesmo erro; resolver no Monitor');
 
 console.info('\nTodos os testes passaram.');

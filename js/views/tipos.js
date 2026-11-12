@@ -1,4 +1,4 @@
-import { html, api, icone, modal, ocupado, toast, dadosDoForm, vazio, ALCADAS } from '../core.js';
+import { html, api, icone, modal, ocupado, toast, dadosDoForm, vazio, ALCADAS_TIPO } from '../core.js';
 
 let tipos = [];
 
@@ -15,7 +15,7 @@ export default {
       </div>
       ${tipos.length ? html`<div class="grade grade-2">${tipos.map(t => html`
         <div class="card" style="cursor:pointer;${t.ativo ? '' : 'opacity:.6'}" data-id="${t.id}">
-          <div class="card-topo"><h3>${t.nome}</h3>${t.ativo ? html`<span class="selo selo-ouro sem-ponto">${ALCADAS[t.alcada]}</span>` : html`<span class="selo selo-cinza">Inativo</span>`}</div>
+          <div class="card-topo"><h3>${t.nome}</h3>${t.ativo ? html`<span class="selo selo-ouro sem-ponto">${ALCADAS_TIPO[t.alcada] || t.alcada}</span>` : html`<span class="selo selo-cinza">Inativo</span>`}</div>
           <div class="card-corpo">
             <p style="margin:0 0 12px" class="secundario">${t.descricao || 'Sem descrição.'}</p>
             <div class="chips">${t.campos.length ? t.campos.map(c => html`<span class="selo selo-azul sem-ponto">${c}</span>`) : html`<span class="secundario" style="font-size:13px">Sem campos extras</span>`}</div>
@@ -30,8 +30,8 @@ export default {
           <div class="campo"><label>Nome</label><input class="entrada" name="nome" value="${t.nome || ''}" required placeholder="Ex.: Parcelamento de entrada acima do limite"></div>
           <div class="campo"><label>Descrição (aparece para o consultor)</label><textarea class="entrada" name="descricao" rows="2">${t.descricao || ''}</textarea></div>
           <div class="campo"><label>Alçada mínima de aprovação</label><select class="entrada" name="alcada">
-            ${Object.entries(ALCADAS).map(([k, v]) => html`<option value="${k}" ${(t.alcada || 'gerente') === k ? 'selected' : ''}>${v}</option>`)}</select>
-            <small>Níveis acima também podem aprovar. Se o cargo estiver vago na sala, o pedido sobe automaticamente.</small></div>
+            ${Object.entries(ALCADAS_TIPO).map(([k, v]) => html`<option value="${k}" ${(t.alcada || 'gerente') === k ? 'selected' : ''}>${v}</option>`)}</select>
+            <small>Níveis acima também podem aprovar. Se o cargo estiver vago na sala, o pedido sobe automaticamente. Na automática, o consultor preenche a negociação e as regras de comercialização definem a alçada.</small></div>
           <div class="campo"><label>Campos que o consultor deve preencher (um por linha)</label>
             <textarea class="entrada" name="campos" rows="4" placeholder="Parcelas da entrada&#10;Limite da política">${(t.campos || []).join('\n')}</textarea></div>
           <label class="check"><input type="checkbox" name="ativo" ${t.ativo === false ? '' : 'checked'}> Ativo</label>

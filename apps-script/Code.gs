@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.5.0',
+  VERSAO: '1.6.0',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -22,6 +22,8 @@ const CONFIG = {
   LOG_MAX_LINHAS: 5000,      // linhas mantidas na aba Logs
   BACKUP_MANTER: 14,         // cópias de backup mantidas no Drive
   LOGIN_TENTATIVAS: 5,       // tentativas erradas antes de bloquear por 15 min
+  ALERTA_EMAILS_DIA: 20,     // e-mails de alerta de erro crítico por dia (a conta Gmail envia ~100 e-mails/dia no total)
+  ALERTA_REPETIR_MIN: 30,    // o mesmo erro só gera novo e-mail depois deste intervalo
 };
 
 // Hierarquia: Diretoria → Superintendente → Regional → Gerente de Sala → Consultor de Vendas → Assistente de Contratos
@@ -50,15 +52,22 @@ const ABAS = {
   Solicitacoes: ['id', 'codigo', 'tipo_id', 'tipo_nome', 'sala_id', 'consultor_id', 'consultor_nome', 'cliente', 'cpf',
     'empreendimento', 'valor', 'campos', 'justificativa', 'status', 'alcada', 'alcada_motivo', 'aprovador_id',
     'aprovador_nome', 'resposta', 'respondido_em', 'desfecho', 'contrato', 'desfecho_justificativa', 'desfecho_por',
-    'desfecho_em', 'criado_em', 'atualizado_em', 'id_casal'],
+    'desfecho_em', 'criado_em', 'atualizado_em', 'id_casal', 'negociacao', 'regras', 'aceite_cliente'],
   VendasMes: ['id', 'sala_id', 'mes', 'total_vendas', 'atualizado_por', 'atualizado_em'],
   Notificacoes: ['id', 'usuario_id', 'titulo', 'mensagem', 'link', 'lida', 'criado_em'],
   Sessoes: ['token_hash', 'usuario_id', 'criado_em', 'expira_em', 'ativo'],
   Auditoria: ['id', 'data', 'usuario_id', 'usuario_nome', 'acao', 'entidade', 'entidade_id', 'detalhes'],
   Logs: ['id', 'data', 'nivel', 'origem', 'acao', 'usuario', 'mensagem', 'local', 'detalhes', 'duracao_ms'],
+  Alertas: ['id', 'data', 'chave', 'tipo', 'mensagem', 'local', 'solucao', 'origem', 'acao', 'usuario', 'ocorrencias',
+    'ultima_vez', 'resolvido', 'resolvido_por', 'resolvido_em'],
 };
 
+// Tipo com alçada calculada pelas regras de comercialização (arquivo RegrasPagamento no Apps Script).
+const ALCADA_AUTO = 'auto';
+const TIPO_AUTO_NOME = 'Condição de pagamento fora da regra';
+
 const TIPOS_PADRAO = [
+  [TIPO_AUTO_NOME, 'Entrada, sinal ou saldo fora das regras de comercialização. O sistema calcula a alçada pelas condições informadas.', ALCADA_AUTO, []],
   ['Parcelamento de entrada acima do limite', 'Entrada parcelada em mais vezes do que a política permite.', 'gerente', ['Parcelas da entrada', 'Limite da política']],
   ['Desconto acima da política', 'Desconto maior que o permitido para a sala.', 'regional', ['Desconto solicitado (%)', 'Desconto máximo permitido (%)']],
   ['Recebimento em empreendimento diferente', 'Pagamento recebido em empreendimento diferente do contratado.', 'gerente', ['Empreendimento onde foi recebido', 'Empreendimento correto']],
@@ -109,6 +118,13 @@ const ROTAS = {
   'tipos.listar': { fn: listarTipos_ },
   'tipos.salvar': { escrita: true, perfis: ['master'], fn: salvarTipo_ },
 
+  'regras.obter': { silenciosa: true, fn: obterRegras_ },
+  'regras.salvar': { escrita: true, perfis: ['master'], fn: salvarRegras_ },
+  'regras.contexto': { silenciosa: true, fn: contextoSala_ },
+
+  'relatorio.obter': { fn: relatorio_ },
+  'relatorio.exportar': { escrita: true, fn: exportarRelatorio_ },
+
   'notificacoes.listar': { silenciosa: true, trocaPendente: true, fn: listarNotificacoes_ },
   'notificacoes.marcarLidas': { escrita: true, silenciosa: true, fn: marcarNotificacoesLidas_ },
 
@@ -116,6 +132,7 @@ const ROTAS = {
   'monitor.erroFront': { publica: true, silenciosa: true, fn: registrarErroFront_ },
   'monitor.testarErro': { perfis: ['master'], fn: testarErro_ },
   'monitor.limparLogs': { escrita: true, perfis: ['master'], fn: limparLogs_ },
+  'monitor.resolverAlerta': { escrita: true, perfis: ['master'], fn: resolverAlerta_ },
 };
 
 // ============================================================================
@@ -534,16 +551,16 @@ function destinatariosDaAlcada_(salaId, alcada) {
   return [];
 }
 
-function calcularAlcada_(tipo, salaId) {
+function calcularAlcada_(tipo, salaId, motivoBase, sobeSala) {
   let alcada = ALCADAS.indexOf(tipo.alcada) >= 0 ? tipo.alcada : 'gerente';
-  let motivo = 'Definida pelo tipo de exceção';
+  let motivo = motivoBase || 'Definida pelo tipo de exceção';
   const sala = estrutura_().sala[salaId];
   const limite = Number(sala && sala.limite_pct || 0);
-  if (limite > 0 && alcada !== ALCADAS[ALCADAS.length - 1]) {
+  if (sobeSala !== false && limite > 0 && alcada !== ALCADAS[ALCADAS.length - 1]) {
     const ind = indicadorSala_(salaId, mesAtual_());
     if (ind.vendas > 0 && ind.pct >= limite) {
       alcada = ALCADAS[ALCADAS.indexOf(alcada) + 1];
-      motivo = 'Elevada: a sala está com ' + ind.pct.toFixed(1) + '% de exceções no mês (limite ' + limite + '%)';
+      motivo = (motivoBase ? motivoBase + ' · ' : '') + 'Elevada: a sala está com ' + ind.pct.toFixed(1) + '% de exceções no mês (limite ' + limite + '%)';
     }
   }
   return { alcada: alcada, motivo: motivo };
@@ -595,6 +612,9 @@ function solicitacaoPublica_(s, u) {
   const o = limpo_(s);
   o.valor = s.valor !== '' ? Number(s.valor) : null;
   o.campos = json_(s.campos, {});
+  o.regras = json_(s.regras, []);
+  o.aceite_cliente = bool_(s.aceite_cliente);
+  delete o.negociacao; // a negociação completa só vai no detalhe (solicitacoes.obter)
   o.sala_nome = c.sala ? c.sala.nome : '';
   o.regional_nome = c.reg ? c.reg.nome : '';
   o.diretoria_nome = c.dir ? c.dir.nome : '';
@@ -624,6 +644,7 @@ function obterSolicitacao_(d, u) {
   const o = solicitacaoPublica_(s, u);
   const tipo = buscar_('Tipos', s.tipo_id);
   o.tipo_descricao = tipo ? tipo.descricao : '';
+  o.negociacao = json_(s.negociacao, null);
   o.pode_cancelar = s.status === 'pendente' && (s.consultor_id === u.id || u.perfil === 'master');
   o.pode_desfecho = ['aprovada', 'negada'].indexOf(s.status) >= 0 && !s.desfecho
     && ['assistente', 'gerente', 'regional', 'superintendente', 'master'].indexOf(u.perfil) >= 0
@@ -658,22 +679,57 @@ function criarSolicitacao_(d, u) {
   if (valor !== '' && (isNaN(valor) || valor < 0)) throw falha_('Valor da venda inválido.');
   const justificativa = texto_(d.justificativa, 'Justificativa', 10, 2000);
   const camposTipo = json_(tipo.campos, []);
-  const campos = {};
+  let campos = {};
   camposTipo.forEach(rotulo => {
     campos[rotulo] = texto_((d.campos || {})[rotulo], rotulo, 1, 300);
   });
 
-  const alc = calcularAlcada_(tipo, salaId);
+  let alc;
+  let extra = {};
+  let empreendimento = String(d.empreendimento || '').trim().slice(0, 120);
+  let valorVenda = valor;
+  if (tipo.alcada === ALCADA_AUTO) {
+    // A alçada sai das regras de comercialização, recalculadas aqui (o navegador não decide nada).
+    const neg = negociacaoLimpa_(d.negociacao);
+    const cfg = regrasConfig_();
+    const aval = RegrasPagamento.avaliarVenda(neg, cfg);
+    if (aval.incompleto) throw falha_(aval.incompleto);
+    if (aval.bloqueios.length) {
+      throw falha_('A política não permite esta negociação: ' + aval.bloqueios.map(b => b.titulo).join('; ') + '.', 'BLOQUEADA');
+    }
+    if (aval.faltaAceite) throw falha_('Há choque de parcelas. Confirme que o cliente está de acordo antes de enviar.', 'ACEITE');
+    if (!aval.gatilhos.length) {
+      throw falha_('Esta negociação está dentro da regra e não precisa de autorização. Siga com a venda normalmente.', 'DENTRO_DA_REGRA');
+    }
+    const motivos = aval.gatilhos.map(g => g.titulo);
+    alc = calcularAlcada_({ alcada: aval.alcadaRegras }, salaId, 'Regras: ' + motivos.join('; '), cfg.params.sobeSala !== false);
+    const fs = aval.cotas;
+    empreendimento = fs.map(f => f.emp).filter((e, i, a) => e && a.indexOf(e) === i).join(' + ').slice(0, 120);
+    valorVenda = Math.round(fs.reduce((t, f) => t + f.valorCota, 0) * 100) / 100;
+    campos = {
+      'Modelo de venda': RegrasPagamento.MODELOS[neg.modelo] || neg.modelo,
+      'Cotas': String(fs.length),
+      'Regras que pediram autorização': motivos.join('; ').slice(0, 300),
+    };
+    if (aval.ciencia.length) campos['Choque de parcelas (aceite do cliente)'] = aval.ciencia.map(g => g.titulo).join('; ').slice(0, 300);
+    extra = {
+      negociacao: JSON.stringify(neg),
+      regras: JSON.stringify(aval.gatilhos.concat(aval.ciencia).map(g => ({ id: g.id, titulo: g.titulo, det: g.det, acao: g.acao, cota: g.cota }))),
+      aceite_cliente: aval.ciencia.length ? 'true' : '',
+    };
+  } else {
+    alc = calcularAlcada_(tipo, salaId);
+  }
   const seq = ler_('Solicitacoes').length + 1;
   const id = novoId_('S');
   const codigo = 'GAV-' + ('00000' + seq).slice(-6) + '-' + sha_(id).slice(0, 4).toUpperCase();
-  const s = inserir_('Solicitacoes', {
+  const s = inserir_('Solicitacoes', Object.assign({
     id: id, codigo: codigo, tipo_id: tipo.id, tipo_nome: tipo.nome, sala_id: salaId,
     consultor_id: u.id, consultor_nome: u.nome, cliente: cliente, cpf: '', id_casal: idCasal,
-    empreendimento: String(d.empreendimento || '').trim().slice(0, 120), valor: valor,
+    empreendimento: empreendimento, valor: valorVenda,
     campos: JSON.stringify(campos), justificativa: justificativa, status: 'pendente',
     alcada: alc.alcada, alcada_motivo: alc.motivo, criado_em: agora_(), atualizado_em: agora_(),
-  });
+  }, extra));
   auditar_(u, 'criou', 'solicitacao', s.id, 'Alçada: ' + alc.alcada + ' — ' + alc.motivo);
   const destinos = destinatariosDaAlcada_(salaId, alc.alcada).filter(x => x.id !== u.id);
   notificar_(destinos.map(x => x.id), 'Nova exceção para aprovar',
@@ -752,6 +808,82 @@ function verificarAutorizacao_(d, u) {
 }
 
 // ============================================================================
+// REGRAS DE COMERCIALIZAÇÃO (alçada automática)
+// O cálculo fica no arquivo RegrasPagamento (mesmo conteúdo de js/regras-pagamento.js).
+// ============================================================================
+const CAMPOS_COTA_ = ['emp', 'valorCota', 'valorEntrada', 'e1Valor', 'e1Forma', 'e1Parc', 'temE2', 'e2Valor', 'e2Forma', 'e2Parc',
+  'temR', 'rForma', 'rData', 'rParc', 'sDia', 'sMes', 'sAno', 'sParc', 'sdParc', 'sdManual', 'sdData', 'sValor', 'sdValor',
+  'desc', 'sForma', 'sdForma'];
+
+/** Guarda só os campos conhecidos da negociação, com tamanho limitado. */
+function negociacaoLimpa_(neg) {
+  if (!neg || typeof neg !== 'object' || !Array.isArray(neg.cotas) || !neg.cotas.length) {
+    throw falha_('Preencha as condições de pagamento da venda.');
+  }
+  if (neg.cotas.length > 20) throw falha_('Máximo de 20 cotas por solicitação.');
+  if (!RegrasPagamento.MODELOS[neg.modelo]) throw falha_('Selecione o modelo de venda.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(neg.venda || ''))) throw falha_('Informe a data da venda.');
+  return {
+    modelo: neg.modelo,
+    venda: String(neg.venda),
+    aceite: neg.aceite === true || neg.aceite === 'true',
+    cotas: neg.cotas.map((c, i) => {
+      const o = {};
+      CAMPOS_COTA_.forEach(k => {
+        const v = c ? c[k] : undefined;
+        if (v === undefined || v === null) return;
+        o[k] = typeof v === 'boolean' ? v : String(v).slice(0, 60);
+      });
+      if (!o.emp) throw falha_('Informe o empreendimento da cota ' + (i + 1) + '.');
+      if (!(Number(o.valorCota) > 0)) throw falha_('Informe o valor da cota ' + (i + 1) + '.');
+      return o;
+    }),
+  };
+}
+
+function regrasConfig_() {
+  if (MEMO_.regras) return MEMO_.regras;
+  const salva = json_(PropertiesService.getScriptProperties().getProperty('REGRAS_PAGAMENTO'), {});
+  MEMO_.regras = RegrasPagamento.config(salva);
+  return MEMO_.regras;
+}
+
+function obterRegras_(d, u) {
+  return { config: regrasConfig_(), editavel: u.perfil === 'master' };
+}
+
+function salvarRegras_(d, u) {
+  const cfg = RegrasPagamento.config({ params: d.params || {}, acoes: d.acoes || {} });
+  const p = cfg.params;
+  ['diasReg', 'diasDir', 'p1Cons', 'p1Ger', 'restMin', 'base', 'baseGran', 'pctSinal'].forEach(k => {
+    p[k] = Number(p[k]);
+    if (!(p[k] >= 0)) throw falha_('Parâmetro inválido: ' + k + '.');
+  });
+  p.tol = p.tol === true || p.tol === 'true';
+  p.sobeSala = p.sobeSala === true || p.sobeSala === 'true';
+  if (p.diasReg >= p.diasDir) throw falha_('O prazo do sinal sem autorização precisa ser menor que o prazo do Regional.');
+  if (p.p1Ger > p.p1Cons) throw falha_('O mínimo da 1ª parcela com o Gerente não pode ser maior que o mínimo sem autorização.');
+  PropertiesService.getScriptProperties().setProperty('REGRAS_PAGAMENTO', JSON.stringify(cfg));
+  delete MEMO_.regras;
+  auditar_(u, 'editou regras de comercialização', 'sistema', 'regras', JSON.stringify(cfg).slice(0, 1000));
+  return { config: regrasConfig_(), editavel: true };
+}
+
+/** O que a tela precisa para mostrar quem aprova: % de exceções da sala e cargos vagos. */
+function contextoSala_(d, u) {
+  const salaId = PERFIS_DE_SALA.indexOf(u.perfil) >= 0 ? u.sala_id : String(d.sala_id || '');
+  if (!salaId || !podeVerSala_(u, salaId)) return { sala_id: '', pct: 0, limite: 0, vendas: 0, vagos: {} };
+  const sala = estrutura_().sala[salaId];
+  const ind = indicadorSala_(salaId, mesAtual_());
+  const vagos = {};
+  ALCADAS.forEach(n => { vagos[n] = !aprovadoresDoNivel_(salaId, n).filter(x => x.id !== u.id).length; });
+  return {
+    sala_id: salaId, pct: Math.round(ind.pct * 10) / 10, limite: Number(sala && sala.limite_pct || 0),
+    vendas: ind.vendas, vagos: vagos,
+  };
+}
+
+// ============================================================================
 // DASHBOARD E VENDAS DO MÊS
 // ============================================================================
 function dashboard_(d, u) {
@@ -827,6 +959,159 @@ function salvarVendasMes_(d, u) {
   else inserir_('VendasMes', Object.assign({ id: novoId_('V') }, dados));
   auditar_(u, 'vendas do mês', 'sala', d.sala_id, d.mes + ': ' + total);
   return indicadorSala_(d.sala_id, d.mes);
+}
+
+// ============================================================================
+// PAINEL DE SOLICITAÇÕES E RELATÓRIO
+// Cada perfil vê só o seu escopo: consultor (as próprias), gerente (a sala), regional e superintendente
+// (as salas das regionais), diretoria (as salas das diretorias) e master (tudo).
+// ============================================================================
+function periodoRelatorio_(d) {
+  const de = /^\d{4}-\d{2}$/.test(String(d.de || '')) ? d.de : mesAtual_();
+  let ate = /^\d{4}-\d{2}$/.test(String(d.ate || '')) ? d.ate : de;
+  if (ate < de) ate = de;
+  return { de: de, ate: ate };
+}
+
+function solicitacoesDoRelatorio_(d, u) {
+  const per = periodoRelatorio_(d);
+  let l = ler_('Solicitacoes').filter(s => podeVer_(u, s));
+  if (u.perfil === 'consultor') l = l.filter(s => s.consultor_id === u.id);
+  l = l.filter(s => { const m = mesDe_(s.criado_em); return m >= per.de && m <= per.ate; });
+  if (d.sala_id) l = l.filter(s => s.sala_id === d.sala_id);
+  if (d.status) l = l.filter(s => s.status === d.status);
+  if (d.alcada) l = l.filter(s => s.alcada === d.alcada);
+  if (d.tipo) l = l.filter(s => motivosDe_(s).indexOf(d.tipo) >= 0);
+  l.sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1));
+  return { periodo: per, itens: l };
+}
+
+/** "Tipo de solicitação" para o painel: no tipo automático, as regras que pediram autorização; nos demais, o próprio tipo. */
+function motivosDe_(s) {
+  const regras = json_(s.regras, []).filter(g => ALCADAS.indexOf(g.acao) >= 0);
+  if (!regras.length) return [s.tipo_nome];
+  const nomes = {};
+  (typeof RegrasPagamento !== 'undefined' ? RegrasPagamento.META : []).forEach(m => { nomes[m.id] = m.nome; });
+  return regras.map(g => nomes[g.id] || g.titulo).filter((v, i, a) => a.indexOf(v) === i);
+}
+
+function relatorio_(d, u) {
+  const r = solicitacoesDoRelatorio_(d, u);
+  const sols = r.itens;
+  const e = estrutura_();
+  const usuarios = {};
+  ler_('Usuarios').forEach(x => { usuarios[x.id] = x; });
+  const conta = f => sols.filter(f).length;
+  const respondidas = sols.filter(s => s.respondido_em);
+  const minutos = s => Math.round((new Date(s.respondido_em) - new Date(s.criado_em)) / 60000);
+
+  const porAlcada = ALCADAS.map(a => {
+    const l = sols.filter(s => s.alcada === a);
+    return { alcada: a, total: l.length, pendentes: l.filter(s => s.status === 'pendente').length,
+      aprovadas: l.filter(s => s.status === 'aprovada').length, negadas: l.filter(s => s.status === 'negada').length };
+  });
+
+  const tipos = {};
+  sols.forEach(s => motivosDe_(s).forEach(t => {
+    const x = tipos[t] = tipos[t] || { nome: t, total: 0, aprovadas: 0, negadas: 0, pendentes: 0 };
+    x.total++;
+    if (s.status === 'aprovada') x.aprovadas++;
+    if (s.status === 'negada') x.negadas++;
+    if (s.status === 'pendente') x.pendentes++;
+  }));
+  const porTipo = Object.keys(tipos).map(k => tipos[k]).sort((a, b) => b.total - a.total);
+
+  const salas = {};
+  sols.forEach(s => {
+    const c = cadeiaSala_(s.sala_id);
+    const x = salas[s.sala_id] = salas[s.sala_id] || {
+      id: s.sala_id, nome: c.sala ? c.sala.nome : '—', regional: c.reg ? c.reg.nome : '', diretoria: c.dir ? c.dir.nome : '',
+      total: 0, pendentes: 0, aprovadas: 0, negadas: 0, por_alcada: {}, por_tipo: {},
+    };
+    x.total++;
+    if (s.status === 'pendente') x.pendentes++;
+    if (s.status === 'aprovada') x.aprovadas++;
+    if (s.status === 'negada') x.negadas++;
+    x.por_alcada[s.alcada] = (x.por_alcada[s.alcada] || 0) + 1;
+    motivosDe_(s).forEach(t => { x.por_tipo[t] = (x.por_tipo[t] || 0) + 1; });
+  });
+  const porSala = Object.keys(salas).map(k => salas[k]).sort((a, b) => b.total - a.total);
+
+  const aprov = {};
+  respondidas.forEach(s => {
+    const x = aprov[s.aprovador_id] = aprov[s.aprovador_id] || {
+      nome: s.aprovador_nome, perfil: (usuarios[s.aprovador_id] || {}).perfil || '', aprovadas: 0, negadas: 0, soma_min: 0, n: 0,
+    };
+    if (s.status === 'aprovada') x.aprovadas++;
+    if (s.status === 'negada') x.negadas++;
+    x.soma_min += minutos(s); x.n++;
+  });
+  const solic = {};
+  sols.forEach(s => {
+    const x = solic[s.consultor_id] = solic[s.consultor_id] || {
+      nome: s.consultor_nome, perfil: (usuarios[s.consultor_id] || {}).perfil || '', sala: (e.sala[s.sala_id] || {}).nome || '',
+      total: 0, aprovadas: 0, negadas: 0,
+    };
+    x.total++;
+    if (s.status === 'aprovada') x.aprovadas++;
+    if (s.status === 'negada') x.negadas++;
+  });
+
+  return {
+    de: r.periodo.de, ate: r.periodo.ate,
+    kpis: {
+      total: sols.length, pendentes: conta(s => s.status === 'pendente'), aprovadas: conta(s => s.status === 'aprovada'),
+      negadas: conta(s => s.status === 'negada'), canceladas: conta(s => s.status === 'cancelada'),
+      finalizadas: conta(s => s.desfecho === 'venda_finalizada'), sem_venda: conta(s => s.desfecho === 'sem_venda'),
+      tempo_medio_min: respondidas.length ? Math.round(respondidas.reduce((t, s) => t + minutos(s), 0) / respondidas.length) : null,
+    },
+    por_alcada: porAlcada,
+    por_tipo: porTipo,
+    salas: porSala,
+    // Sala × tipo: diretoria e master veem todas as salas do escopo; os demais, as salas que acompanham
+    matriz: { tipos: porTipo.slice(0, 10).map(t => t.nome), salas: porSala.map(s => ({ nome: s.nome, regional: s.regional, por_tipo: s.por_tipo, total: s.total })) },
+    aprovadores: Object.keys(aprov).map(k => aprov[k]).map(x => ({
+      nome: x.nome, perfil: x.perfil, aprovadas: x.aprovadas, negadas: x.negadas, tempo_medio_min: x.n ? Math.round(x.soma_min / x.n) : null,
+    })).sort((a, b) => (b.aprovadas + b.negadas) - (a.aprovadas + a.negadas)),
+    solicitantes: Object.keys(solic).map(k => solic[k]).sort((a, b) => b.total - a.total).slice(0, 30),
+    filtros: {
+      salas: salasDoUsuario_(u).map(id => ({ id: id, nome: (e.sala[id] || {}).nome || id })).sort((a, b) => a.nome.localeCompare(b.nome)),
+    },
+  };
+}
+
+/** Relatório completo, linha a linha, com quem pediu e quem autorizou. */
+function exportarRelatorio_(d, u) {
+  const r = solicitacoesDoRelatorio_(d, u);
+  const usuarios = {};
+  ler_('Usuarios').forEach(x => { usuarios[x.id] = x; });
+  const rotAlcada = { gerente: 'Gerente de Sala', regional: 'Regional', superintendente: 'Superintendente', diretor: 'Diretoria' };
+  const rotStatus = { pendente: 'Pendente', aprovada: 'Aprovada', negada: 'Negada', cancelada: 'Cancelada' };
+  const rotDesfecho = { venda_finalizada: 'Venda finalizada', sem_venda: 'Sem venda' };
+  const dataBr = iso => (iso ? Utilities.formatDate(new Date(iso), CONFIG.TZ, 'dd/MM/yyyy HH:mm') : '');
+  const colunas = ['Código', 'Criada em', 'Mês', 'Sala', 'Regional', 'Diretoria', 'Tipo de exceção', 'Regras / motivos',
+    'Alçada', 'Motivo da alçada', 'Status', 'Solicitante', 'Perfil do solicitante', 'E-mail do solicitante', 'ID Casal',
+    'Empreendimento', 'Valor (R$)', 'Modelo de venda', 'Cotas', 'Choque com aceite do cliente', 'Justificativa',
+    'Autorizador', 'Perfil do autorizador', 'E-mail do autorizador', 'Respondida em', 'Tempo de resposta (min)',
+    'Comentário do autorizador', 'Desfecho', 'Contrato', 'Desfecho registrado por', 'Desfecho em', 'Justificativa do desfecho'];
+  const linhas = r.itens.slice(0, 5000).map(s => {
+    const c = cadeiaSala_(s.sala_id);
+    const sol = usuarios[s.consultor_id] || {};
+    const apr = usuarios[s.aprovador_id] || {};
+    const campos = json_(s.campos, {});
+    return [
+      s.codigo, dataBr(s.criado_em), mesDe_(s.criado_em), c.sala ? c.sala.nome : '', c.reg ? c.reg.nome : '', c.dir ? c.dir.nome : '',
+      s.tipo_nome, motivosDe_(s).join('; '), rotAlcada[s.alcada] || s.alcada, s.alcada_motivo, rotStatus[s.status] || s.status,
+      s.consultor_nome, rotuloPerfil_(sol.perfil || ''), sol.email || '', s.id_casal, s.empreendimento,
+      s.valor === '' ? '' : Number(s.valor), campos['Modelo de venda'] || '', campos['Cotas'] || '',
+      bool_(s.aceite_cliente) ? 'Sim' : '', s.justificativa,
+      s.aprovador_nome || '', s.aprovador_id ? rotuloPerfil_(apr.perfil || '') : '', apr.email || '', dataBr(s.respondido_em),
+      s.respondido_em ? Math.round((new Date(s.respondido_em) - new Date(s.criado_em)) / 60000) : '', s.resposta || '',
+      rotDesfecho[s.desfecho] || '', s.contrato || '', s.desfecho_por || '', dataBr(s.desfecho_em), s.desfecho_justificativa || '',
+    ];
+  });
+  auditar_(u, 'exportou relatório', 'relatorio', '', r.periodo.de + ' a ' + r.periodo.ate + ' · ' + linhas.length + ' linha(s)');
+  return { de: r.periodo.de, ate: r.periodo.ate, colunas: colunas, linhas: linhas, total: r.itens.length };
 }
 
 // ============================================================================
@@ -1203,7 +1488,9 @@ function listarTipos_(d, u) {
 function salvarTipo_(d, u) {
   const nome = texto_(d.nome, 'Nome do tipo', 3, 100);
   nomeUnico_('Tipos', nome, d.id);
-  if (ALCADAS.indexOf(d.alcada) < 0) throw falha_('Selecione a alçada: gerente, regional ou superintendente.');
+  if (ALCADAS.indexOf(d.alcada) < 0 && d.alcada !== ALCADA_AUTO) {
+    throw falha_('Selecione a alçada: gerente, regional, superintendente, diretoria ou automática pelas regras.');
+  }
   const campos = (Array.isArray(d.campos) ? d.campos : []).map(c => String(c).trim()).filter(Boolean).slice(0, 8);
   const r = salvarRegistro_('Tipos', d.id, {
     nome: nome, descricao: String(d.descricao || '').trim().slice(0, 300), alcada: d.alcada,
@@ -1293,6 +1580,137 @@ function log_(nivel, origem, acao, usuario, mensagem, local, detalhes, duracaoMs
     String(usuario || '-'), String(mensagem || '').slice(0, 500), String(local || ''),
     String(detalhes || '').slice(0, 5000), duracaoMs === '' || duracaoMs === undefined ? '' : String(duracaoMs),
   ]);
+  if (nivel === 'ERROR') {
+    try { alertarErro_(origem, acao, usuario, mensagem, local); } catch (e) { /* o alerta nunca pode derrubar a resposta */ }
+  }
+}
+
+// ============================================================================
+// ALERTAS DE ERRO CRÍTICO (e-mail + notificação no app do master)
+// ============================================================================
+let ALERTANDO_ = false; // evita laço: se o próprio e-mail de alerta falhar, não gera outro alerta
+
+/** Traduz o erro em tipo e "como resolver". A ordem importa: do mais específico para o mais genérico. */
+function diagnosticarErro_(origem, acao, mensagem, local) {
+  const m = String(mensagem || '');
+  const regras = [
+    [/RegrasPagamento is not defined|RegrasPagamento não está definid/i, 'Arquivo de regras ausente no Apps Script',
+      'No editor do Apps Script, clique em + → Script, crie o arquivo "RegrasPagamento", cole o conteúdo de js/regras-pagamento.js e publique uma nova versão (Implantar → Gerenciar implantações → Nova versão).'],
+    [/Aba "(.+)" não encontrada/, 'Aba da planilha faltando',
+      'Rode a função setup() no editor do Apps Script. Ela recria as abas e colunas que faltam sem apagar nenhum dado.'],
+    [/permission|permiss|authoriz|autoriza[cç][aã]o necess|Required permissions/i, 'Permissão do Google pendente',
+      'Abra o editor do Apps Script, rode setup() e aceite as permissões pedidas. Depois publique uma nova versão.'],
+    [/Service invoked too many times|too many times|quota|Limit Exceeded|limite.*excedid/i, 'Cota diária do Google excedida',
+      'O Google limita e-mails e chamadas por dia na conta. O serviço volta sozinho em até 24 h. Se repetir, reduza os e-mails automáticos ou use uma conta Google Workspace.'],
+    [/Exceeded maximum execution time|tempo m[aá]ximo de execu/i, 'Tempo limite do Apps Script',
+      'A planilha está pesada para responder. No Monitor, use "Limpar logs" e confira se a rotina diária (manutencao) está ativa em Acionadores no editor do Apps Script.'],
+    [/Lock|trava|ocupado/i, 'Sistema ocupado (acessos simultâneos)',
+      'Muitas gravações ao mesmo tempo. Normalmente passa sozinho; se repetir com frequência, avise quem mantém o sistema.'],
+    [/Service Spreadsheets|Spreadsheet|planilha.*(n[aã]o|indispon)|Document .* is missing|could not find/i, 'Planilha indisponível',
+      'Confira se a planilha "GAV Autorizações" existe, não foi movida para a lixeira e se a conta dona do script ainda tem acesso. Se trocou a planilha, rode setup() a partir dela.'],
+    [/OneSignal|HTTP 4\d\d/i, 'Push (OneSignal) recusado',
+      'Confira a chave ONESIGNAL_REST_KEY em Configurações do projeto → Propriedades do script e se o app do OneSignal continua ativo.'],
+  ];
+  for (let i = 0; i < regras.length; i++) if (regras[i][0].test(m)) return { tipo: regras[i][1], solucao: regras[i][2] };
+  if (acao === 'email') return { tipo: 'Envio de e-mail falhou', solucao: 'Rode testarEmail() no editor do Apps Script. Se pedir permissão, aceite; se a cota do dia acabou, os e-mails voltam em até 24 h.' };
+  if (/backup/.test(String(acao))) return { tipo: 'Backup diário falhou', solucao: 'Confira o espaço livre no Google Drive da conta dona do sistema e se a pasta "Backups - GAV Autorizações" existe.' };
+  if (acao === 'monitor.testarErro') return { tipo: 'Teste do monitor (erro proposital)', solucao: 'Nada a fazer: foi o botão "Testar erro". Marque como resolvido.' };
+  if (origem === 'frontend') {
+    if (/dynamically imported module|Failed to fetch|Loading (chunk|module)|import/i.test(m)) {
+      return { tipo: 'Arquivo do app não carregou', solucao: 'Confira se o arquivo indicado está publicado no GitHub Pages. Se acabou de atualizar o site, peça para fechar e abrir o app de novo.' };
+    }
+    return { tipo: 'Erro no app (navegador)', solucao: 'O erro se repetiu no navegador dos usuários. Veja o local e o stack no Monitor e corrija o arquivo indicado no repositório.' };
+  }
+  if (/Cannot read|is not a function|is not defined|undefined|null/i.test(m)) {
+    return { tipo: 'Erro de código no servidor', solucao: 'Falha no Code.gs no local indicado. Veja os dados enviados e o stack no Monitor e corrija o trecho (ou envie para quem mantém o sistema).' };
+  }
+  return { tipo: 'Erro inesperado no servidor', solucao: 'Veja o local, os dados enviados e o stack no Monitor. Se o erro continuar, avise quem mantém o sistema com o código do alerta.' };
+}
+
+function podeEnviarAlertaEmail_() {
+  try { if (MailApp.getRemainingDailyQuota() < 10) return false; } catch (e) { return false; }
+  const p = PropertiesService.getScriptProperties();
+  const hoje = Utilities.formatDate(new Date(), CONFIG.TZ, 'yyyy-MM-dd');
+  const [dia, n] = String(p.getProperty('ALERTA_EMAILS') || '').split('|');
+  const enviados = dia === hoje ? Number(n || 0) : 0;
+  if (enviados >= CONFIG.ALERTA_EMAILS_DIA) return false;
+  p.setProperty('ALERTA_EMAILS', hoje + '|' + (enviados + 1));
+  return true;
+}
+
+function alertarErro_(origem, acao, usuario, mensagem, local) {
+  if (ALERTANDO_) return;
+  ALERTANDO_ = true;
+  try {
+    const cache = CacheService.getScriptCache();
+    const chave = sha_(origem + '|' + (local || '') + '|' + String(mensagem || '').replace(/\d+/g, '#').slice(0, 200)).slice(0, 16);
+    if (origem === 'frontend') {
+      // erro no navegador de uma pessoa só vira alerta quando se repete (3 vezes em 15 minutos)
+      const k = 'afr_' + chave;
+      const n = Number(cache.get(k) || 0) + 1;
+      cache.put(k, String(n), 900);
+      if (n < 3) return;
+    }
+    const diag = diagnosticarErro_(origem, acao, mensagem, local);
+    const agora = agora_();
+    let alerta = null;
+    try {
+      const aberto = ler_('Alertas').find(a => a.chave === chave && a.resolvido !== 'true');
+      alerta = aberto
+        ? atualizar_('Alertas', aberto, { ocorrencias: String(Number(aberto.ocorrencias || 1) + 1), ultima_vez: agora, mensagem: String(mensagem || '').slice(0, 500) })
+        : inserir_('Alertas', {
+          id: novoId_('E'), data: agora, chave: chave, tipo: diag.tipo, mensagem: String(mensagem || '').slice(0, 500), local: local || '',
+          solucao: diag.solucao, origem: origem, acao: String(acao || ''), usuario: String(usuario || ''), ocorrencias: '1',
+          ultima_vez: agora, resolvido: 'false', resolvido_por: '', resolvido_em: '',
+        });
+    } catch (e) { /* aba Alertas ainda não existe (rode setup); o aviso segue mesmo assim */ }
+
+    const kAviso = 'alv_' + chave;
+    if (cache.get(kAviso)) return; // o mesmo erro já foi avisado há pouco
+    cache.put(kAviso, '1', CONFIG.ALERTA_REPETIR_MIN * 60);
+    const link = '#/monitor' + (alerta ? '?alerta=' + alerta.id : '');
+    let masters = [];
+    try { masters = ler_('Usuarios').filter(x => x.perfil === 'master' && bool_(x.ativo)); } catch (e) { masters = []; }
+    try {
+      notificar_(masters.map(x => x.id), '⚠️ Erro crítico: ' + diag.tipo, (local || 'local não identificado') + ' — ' + diag.solucao.slice(0, 160), link);
+    } catch (e) { /* segue para o e-mail */ }
+    const destinos = masters.map(x => x.email).concat([CONFIG.MASTER_EMAIL])
+      .map(x => String(x || '').toLowerCase()).filter((x, i, a) => x && !/seu-email/.test(x) && a.indexOf(x) === i);
+    if (!destinos.length || !podeEnviarAlertaEmail_()) return;
+    const linha = (k, v) => '<tr><td style="padding:6px 10px 6px 0;color:#5F6B80;vertical-align:top;white-space:nowrap">' + k +
+      '</td><td style="padding:6px 0">' + esc_(v) + '</td></tr>';
+    const corpo = '<p>O monitor encontrou um erro que pode afetar o sistema.</p>' +
+      '<table style="border-collapse:collapse;font-size:14px">' +
+      linha('Tipo', diag.tipo) + linha('Local', local || 'não identificado') + linha('Mensagem', mensagem) +
+      linha('Ação', acao || '-') + linha('Usuário', usuario || '-') + linha('Origem', origem) +
+      linha('Quando', Utilities.formatDate(new Date(), CONFIG.TZ, 'dd/MM/yyyy HH:mm:ss')) +
+      (alerta ? linha('Ocorrências', alerta.ocorrencias) + linha('Código do alerta', alerta.id) : '') + '</table>' +
+      '<div style="margin-top:18px;padding:14px 16px;background:#FCF0D9;border-radius:10px"><strong>Como resolver:</strong><br>' +
+      esc_(diag.solucao) + '</div>' +
+      '<p style="color:#5F6B80;font-size:13px">Se o mesmo erro continuar, você recebe outro aviso depois de ' + CONFIG.ALERTA_REPETIR_MIN +
+      ' minutos (no máximo ' + CONFIG.ALERTA_EMAILS_DIA + ' e-mails de alerta por dia).</p>';
+    destinos.forEach(email => enviarEmail_(email, '⚠️ Erro crítico no GAV Autorizações: ' + diag.tipo, 'Erro crítico detectado', corpo,
+      'Abrir o Monitor', CONFIG.APP_URL + link));
+  } finally {
+    ALERTANDO_ = false;
+  }
+}
+
+function alertasAbertos_() {
+  try {
+    return ler_('Alertas').filter(a => a.resolvido !== 'true')
+      .sort((a, b) => (a.ultima_vez < b.ultima_vez ? 1 : -1)).slice(0, 30).map(limpo_);
+  } catch (e) {
+    return [];
+  }
+}
+
+function resolverAlerta_(d, u) {
+  const a = buscar_('Alertas', d.id);
+  if (!a) throw falha_('Alerta não encontrado.');
+  atualizar_('Alertas', a, { resolvido: 'true', resolvido_por: u.nome, resolvido_em: agora_() });
+  auditar_(u, 'resolveu alerta', 'alerta', a.id, a.tipo + ' — ' + a.local);
+  return { resolvido: true, alertas: alertasAbertos_() };
 }
 
 /** Extrai "Code.gs › função() › linha N" do stack trace. */
@@ -1395,7 +1813,9 @@ function monitorStatus_(d) {
       abas: ss_().getSheets().map(s => ({ nome: s.getName(), linhas: Math.max(0, s.getLastRow() - 1) })),
       ultimo_erro: erros.length ? erros[erros.length - 1] : null,
       tempo_leitura_ms: Date.now() - inicio,
+      regras_instaladas: typeof RegrasPagamento !== 'undefined',
     },
+    alertas: alertasAbertos_(),
   };
 }
 
@@ -1438,6 +1858,13 @@ function setup() {
     TIPOS_PADRAO.forEach(t => inserir_('Tipos', {
       id: novoId_('T'), nome: t[0], descricao: t[1], alcada: t[2], campos: JSON.stringify(t[3]), ativo: 'true', criado_em: agora_(),
     }));
+  } else if (!ler_('Tipos').some(t => t.alcada === ALCADA_AUTO)) {
+    // Atualização 1.6: cria o tipo com alçada automática nas instalações que já existiam
+    const t = TIPOS_PADRAO[0];
+    inserir_('Tipos', { id: novoId_('T'), nome: t[0], descricao: t[1], alcada: t[2], campos: JSON.stringify(t[3]), ativo: 'true', criado_em: agora_() });
+  }
+  if (typeof RegrasPagamento === 'undefined') {
+    Logger.log('⚠️ Falta o arquivo RegrasPagamento: crie no editor (+ → Script) e cole o conteúdo de js/regras-pagamento.js.');
   }
 
   const novasSalas = importarSalasPadrao_();
