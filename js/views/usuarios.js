@@ -179,7 +179,8 @@ export default {
           const v = vinculoDoPerfil(p);
           caixa.innerHTML = html`<div class="campo"><span class="rotulo">${v.titulo} sob responsabilidade de ${u.nome.split(' ')[0]}</span>
             ${v.lista.length ? html`<div class="grade grade-2" style="gap:8px">${v.lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}"> ${x.rotulo}</label>`)}</div>`
-              : html`<div class="aviso aviso-ambar">${icone('alerta')}<div>Nenhuma ${v.singular} cadastrada. Crie primeiro em <a href="#/estrutura">Estrutura</a>.</div></div>`}</div>`.toString();
+              : html`<div class="aviso aviso-ambar">${icone('alerta')}<div>Nenhuma ${v.singular} cadastrada ainda. Pode aprovar agora e vincular depois em <a href="#/estrutura">Estrutura</a>.</div></div>`}
+            ${v.lista.length ? html`<small>Pode deixar sem marcar e vincular depois em Estrutura.</small>` : ''}</div>`.toString();
         }
       };
       desenhar();

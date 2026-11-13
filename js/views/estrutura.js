@@ -80,6 +80,18 @@ export default {
 
   montar(el, ctx) {
     const superintendentes = est.usuarios.filter(u => u.perfil === 'superintendente');
+    const diretoresPessoas = est.usuarios.filter(u => u.perfil === 'diretor');
+    /** De onde a sala herda os responsáveis: Sala → Regional (regional e superintendente) → Diretoria (diretores). */
+    const cadeia = regionalId => {
+      const r = est.regionais.find(x => x.id === regionalId);
+      if (!r) return html`<div class="aviso aviso-ambar">${icone('alerta')}<div>Sem regional, a sala fica sem Regional, Superintendente e Diretoria. Escolha a regional acima.</div></div>`;
+      const d = est.diretorias.find(x => x.id === r.diretoria_id);
+      return html`<div class="cadeia-sala">
+        <div><span class="titulo-papel">Regional</span>${r.gestor_nome || html`<span class="secundario">não definido</span>`}</div>
+        <div><span class="titulo-papel">Superintendente</span>${r.superintendente_nome || html`<span class="secundario">não definido</span>`}</div>
+        <div><span class="titulo-papel">Diretoria</span>${d ? (d.diretores.length ? d.diretores.join(', ') : html`<span class="secundario">${d.nome}: sem diretor</span>`) : html`<span class="secundario">regional sem diretoria</span>`}</div>
+        <small>Para trocar, edite a regional <b>${r.nome}</b>${d ? html` ou a diretoria <b>${d.nome}</b>` : ''}.</small></div>`;
+    };
     const regionaisPessoas = est.usuarios.filter(u => u.perfil === 'regional');
 
     function abrir(tipo, id) {
@@ -87,8 +99,12 @@ export default {
       const ativo = reg.ativo !== false;
       let corpo;
       if (tipo === 'diretoria') {
+        const marcados = reg.diretores_ids || [];
         corpo = html`<div class="campo"><label>Nome da diretoria</label><input class="entrada" name="nome" value="${reg.nome || ''}" required></div>
-          <div class="aviso aviso-azul">${icone('usuarios')}<div>Os diretores são vinculados à diretoria no cadastro de <a href="#/usuarios">Usuários</a>. Os superintendentes, em cada regional.</div></div>`;
+          <div class="campo"><span class="rotulo">Diretores desta diretoria</span>
+            ${diretoresPessoas.length ? html`<div class="grade grade-2" style="gap:8px">${diretoresPessoas.map(p => html`<label class="check"><input type="checkbox" name="diretores" value="${p.id}" ${marcados.includes(p.id) ? 'checked' : ''}> ${p.nome}${p.ativo === false ? ' (inativo)' : ''}</label>`)}</div>`
+              : html`<small>Nenhum usuário com perfil Diretoria aprovado. Aprove os cadastros em <a href="#/usuarios">Usuários</a>.</small>`}</div>
+          <div class="aviso aviso-azul">${icone('usuarios')}<div>Os superintendentes são escolhidos em cada regional desta diretoria. As salas recebem a diretoria pela regional.</div></div>`;
       } else if (tipo === 'regional') {
         corpo = html`<div class="campo"><label>Nome da regional</label><input class="entrada" name="nome" value="${reg.nome || ''}" required></div>
           <div class="campo"><label>Diretoria</label><select class="entrada" name="diretoria_id">${opcoes(est.diretorias, reg.diretoria_id, '— sem diretoria —')}</select></div>
@@ -98,7 +114,9 @@ export default {
             ${opcoes(regionaisPessoas, reg.gestor_id, '— sem regional —')}</select><small>Só aparecem usuários com perfil Regional.</small></div>`;
       } else {
         corpo = html`<div class="campo"><label>Nome da sala de vendas</label><input class="entrada" name="nome" value="${reg.nome || ''}" required></div>
-          <div class="campo"><label>Regional</label><select class="entrada" name="regional_id">${opcoes(est.regionais, reg.regional_id, '— sem regional —')}</select></div>
+          <div class="campo"><label>Regional</label><select class="entrada" name="regional_id">${opcoes(est.regionais, reg.regional_id, '— sem regional —')}</select>
+            <small>A sala recebe o Regional, o Superintendente e a Diretoria pela regional escolhida.</small></div>
+          <div id="cadeia-sala">${cadeia(reg.regional_id)}</div>
           <div class="campo"><label>Limite padrão de exceções no mês (%)</label>
             <input class="entrada" name="limite_pct" type="number" min="0" max="100" step="0.5" value="${reg.limite_pct ?? 0}">
             <small>Vale nos meses sem % definido em <a href="#/metas">Metas das salas</a>. Quando a sala atinge o limite, novas exceções sobem um nível de alçada. 0 = sem limite.</small></div>
@@ -110,10 +128,12 @@ export default {
         rodape: html`<button class="btn btn-claro" data-fechar>Cancelar</button><button class="btn btn-primario" type="submit" form="form-est">Salvar</button>`,
       });
       const form = m.el.querySelector('#form-est');
+      form.regional_id?.addEventListener('change', () => { m.el.querySelector('#cadeia-sala').innerHTML = cadeia(form.regional_id.value).toString(); });
       form.addEventListener('submit', async ev => {
         ev.preventDefault();
         const d = dadosDoForm(form);
         d.ativo = form.ativo.checked;
+        if (tipo === 'diretoria') { delete d.diretores; d.diretores_ids = [...form.querySelectorAll('[name=diretores]:checked')].map(c => c.value); }
         if (id) d.id = id;
         const acao = { diretoria: 'estrutura.salvarDiretoria', regional: 'estrutura.salvarRegional', sala: 'estrutura.salvarSala' }[tipo];
         try {

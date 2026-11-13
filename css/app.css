@@ -639,3 +639,8 @@ dl.dados dd { margin: 4px 0 0; font-weight: 500; word-break: break-word; }
 .marca-app.animado .marca-app-nome { opacity: 0; animation: marca-app-nome .8s cubic-bezier(.2, .7, .2, 1) .9s forwards; }
 @keyframes marca-app-nome { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .marca-app.animado .marca-app-nome { opacity: 1; animation: none; } }
+
+/* Estrutura: de onde a sala herda os responsáveis */
+.cadeia-sala { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); margin-bottom: 14px; font-size: 14px; }
+.cadeia-sala > div { display: flex; justify-content: space-between; gap: 12px; }
+.cadeia-sala small { color: var(--muted); }

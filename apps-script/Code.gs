@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.7.0',
+  VERSAO: '1.7.1',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -1229,7 +1229,7 @@ function obterEstrutura_(d, u) {
   return {
     diretorias: Object.keys(e.dir).map(k => e.dir[k]).map(x => ({
       id: x.id, nome: x.nome, ativo: bool_(x.ativo),
-      diretores: listaIds_(x.diretores).map(nome).filter(Boolean),
+      diretores: listaIds_(x.diretores).map(nome).filter(Boolean), diretores_ids: listaIds_(x.diretores),
     })).sort((a, b) => a.nome.localeCompare(b.nome)),
     regionais: Object.keys(e.reg).map(k => e.reg[k]).map(x => ({
       id: x.id, nome: x.nome, diretoria_id: x.diretoria_id, diretoria_nome: (e.dir[x.diretoria_id] || {}).nome || '',
@@ -1251,7 +1251,17 @@ function nomeUnico_(aba, nome, id) {
 function salvarDiretoria_(d, u) {
   const nome = texto_(d.nome, 'Nome da diretoria', 2, 80);
   nomeUnico_('Diretorias', nome, d.id);
-  const r = salvarRegistro_('Diretorias', d.id, { nome: nome, ativo: boolTxt_(d.ativo) }, 'D');
+  const dados = { nome: nome, ativo: boolTxt_(d.ativo) };
+  if (Array.isArray(d.diretores_ids)) {
+    const usuarios = ler_('Usuarios');
+    const ids = d.diretores_ids.map(String).filter((v, i, a) => v && a.indexOf(v) === i);
+    ids.forEach(id => {
+      const x = usuarios.find(k => k.id === id);
+      if (!x || x.perfil !== 'diretor') throw falha_('Selecione só usuários com perfil Diretoria.');
+    });
+    dados.diretores = ids.join(',');
+  }
+  const r = salvarRegistro_('Diretorias', d.id, dados, 'D');
   auditar_(u, d.id ? 'editou' : 'criou', 'diretoria', r.id, nome);
   return limpo_(r);
 }
@@ -1435,10 +1445,8 @@ function aprovarCadastro_(d, u) {
     salaId = d.sala_id || alvo.sala_id;
     if (!estrutura_().sala[salaId]) throw falha_('Selecione a sala de vendas deste usuário.');
   }
+  // O vínculo pode ficar para depois: o master liga a pessoa em Estrutura (diretoria ou regional).
   const ids = Array.isArray(d.vinculo_ids) ? d.vinculo_ids : [];
-  if (['regional', 'superintendente', 'diretor'].indexOf(perfil) >= 0 && !ids.length) {
-    throw falha_('Marque pelo menos uma ' + (perfil === 'diretor' ? 'diretoria' : 'regional') + ' sob responsabilidade deste usuário.');
-  }
   const reg = atualizar_('Usuarios', alvo, { perfil: perfil, sala_id: salaId, ativo: 'true', cadastro: 'aprovado' });
   aplicarVinculos_(reg, ids);
   auditar_(u, 'aprovou cadastro', 'usuario', alvo.id, alvo.nome + ' — ' + perfil);

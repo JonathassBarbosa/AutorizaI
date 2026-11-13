@@ -218,8 +218,10 @@ passo('autocadastro: escolhe função e sala, entra só depois da aprovação do
 // --- diretoria: o master aponta as diretorias na aprovação
 ok('cadastro.solicitar', { nome: 'Diana Diretora', email: 'diana@gav.dev', perfil: 'diretor', telefone: '(11) 91234-5678', senha: 'Diana1234' });
 const diana = ok('usuarios.listar', {}, tm).find(x => x.email === 'diana@gav.dev');
-falha('usuarios.aprovarCadastro', { id: diana.id }, tm);
-ok('usuarios.aprovarCadastro', { id: diana.id, vinculo_ids: [dir.id] }, tm);
+ok('usuarios.aprovarCadastro', { id: diana.id }, tm); // pode aprovar sem vínculo e ligar depois
+ok('estrutura.salvarDiretoria', { id: dir.id, nome: 'Diretoria Nordeste', ativo: true, diretores_ids: [diana.id] }, tm);
+assert.deepStrictEqual(ok('estrutura.obter', {}, tm).diretorias.find(x => x.id === dir.id).diretores_ids, [diana.id]);
+falha('estrutura.salvarDiretoria', { id: dir.id, nome: 'Diretoria Nordeste', ativo: true, diretores_ids: [reg.id] }, tm);
 const tdd = ok('auth.login', { email: 'diana@gav.dev', senha: 'Diana1234' }).token;
 assert.strictEqual(ok('dashboard.obter', {}, tdd).salas.length, 2);
 assert.match(ok('auth.eu', {}, tdd).vinculo, /Diretoria Nordeste/);
