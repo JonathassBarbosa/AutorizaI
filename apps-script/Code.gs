@@ -11,7 +11,7 @@
 // CONFIGURAÇÃO — ajuste antes de rodar setup()
 // ============================================================================
 const CONFIG = {
-  VERSAO: '1.7.1',
+  VERSAO: '1.8.0',
   MASTER_EMAIL: 'treinamentoadmcomercial@gmail.com',   // e-mail de login do usuário master
   MASTER_NOME: 'Master',
   APP_URL: 'https://jonathassbarbosa.github.io/AutorizaI/', // endereço do GitHub Pages (com / no final)
@@ -48,7 +48,7 @@ const ABAS = {
   Usuarios: ['id', 'nome', 'email', 'telefone', 'perfil', 'sala_id', 'ativo', 'senha_hash', 'salt', 'trocar_senha', 'criado_em', 'ultimo_acesso', 'cadastro'],
   Diretorias: ['id', 'nome', 'superintendente_id', 'ativo', 'criado_em', 'diretores'],
   Regionais: ['id', 'nome', 'diretoria_id', 'gestor_id', 'ativo', 'criado_em', 'superintendente_id'],
-  Salas: ['id', 'nome', 'regional_id', 'limite_pct', 'ativo', 'criado_em'],
+  Salas: ['id', 'nome', 'regional_id', 'limite_pct', 'ativo', 'criado_em', 'regional_resp_id', 'superintendente_id', 'diretores'],
   Tipos: ['id', 'nome', 'descricao', 'alcada', 'campos', 'ativo', 'criado_em'],
   Solicitacoes: ['id', 'codigo', 'tipo_id', 'tipo_nome', 'sala_id', 'consultor_id', 'consultor_nome', 'cliente', 'cpf',
     'empreendimento', 'valor', 'campos', 'justificativa', 'status', 'alcada', 'alcada_motivo', 'aprovador_id',
@@ -205,6 +205,7 @@ function comTrava_(fn) {
   if (!trava.tryLock(20000)) throw falha_('Sistema ocupado, tente novamente em instantes.', 'OCUPADO');
   try {
     MEMO_ = { ss: MEMO_.ss }; // relê as abas dentro da trava
+    try { migrarResponsaveisSalas_(); } catch (e) { /* aba Salas sem as colunas novas: rode setup() */ }
     return fn();
   } finally {
     trava.releaseLock();
@@ -504,11 +505,11 @@ function salasDoUsuario_(u) {
   if (u.perfil === 'master') {
     ids = Object.keys(e.sala);
   } else if (u.perfil === 'diretor') {
-    ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.dir && listaIds_(c.dir.diretores).indexOf(u.id) >= 0; });
+    ids = Object.keys(e.sala).filter(id => listaIds_(e.sala[id].diretores).indexOf(u.id) >= 0);
   } else if (u.perfil === 'superintendente') {
-    ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.reg && c.reg.superintendente_id === u.id; });
+    ids = Object.keys(e.sala).filter(id => e.sala[id].superintendente_id === u.id);
   } else if (u.perfil === 'regional') {
-    ids = Object.keys(e.sala).filter(id => { const c = cadeiaSala_(id); return c.reg && c.reg.gestor_id === u.id; });
+    ids = Object.keys(e.sala).filter(id => e.sala[id].regional_resp_id === u.id);
   } else {
     ids = u.sala_id && e.sala[u.sala_id] ? [u.sala_id] : [];
   }
@@ -532,13 +533,14 @@ function podeAprovar_(u, s) {
   return podeVerSala_(u, s.sala_id);
 }
 
+/** Regional, Superintendente e Diretoria são escolhidos em cada sala (a regional e a diretoria só agrupam). */
 function aprovadoresDoNivel_(salaId, nivel) {
-  const c = cadeiaSala_(salaId);
+  const sala = estrutura_().sala[salaId] || {};
   const ativos = ler_('Usuarios').filter(u => bool_(u.ativo));
   if (nivel === 'gerente') return ativos.filter(u => u.perfil === 'gerente' && u.sala_id === salaId);
-  if (nivel === 'regional') return c.reg && c.reg.gestor_id ? ativos.filter(u => u.id === c.reg.gestor_id) : [];
-  if (nivel === 'superintendente') return c.reg && c.reg.superintendente_id ? ativos.filter(u => u.id === c.reg.superintendente_id) : [];
-  if (nivel === 'diretor') return c.dir ? ativos.filter(u => u.perfil === 'diretor' && listaIds_(c.dir.diretores).indexOf(u.id) >= 0) : [];
+  if (nivel === 'regional') return ativos.filter(u => u.perfil === 'regional' && u.id === sala.regional_resp_id);
+  if (nivel === 'superintendente') return ativos.filter(u => u.perfil === 'superintendente' && u.id === sala.superintendente_id);
+  if (nivel === 'diretor') return ativos.filter(u => u.perfil === 'diretor' && listaIds_(sala.diretores).indexOf(u.id) >= 0);
   return ativos.filter(u => u.perfil === 'master');
 }
 
@@ -598,17 +600,10 @@ function vinculoTexto_(u) {
   const e = estrutura_();
   if (u.perfil === 'master') return 'Acesso total';
   if (u.cadastro === 'pendente') return 'Aguardando aprovação';
-  if (u.perfil === 'diretor') {
-    const l = Object.keys(e.dir).map(k => e.dir[k]).filter(d => listaIds_(d.diretores).indexOf(u.id) >= 0).map(d => d.nome);
-    return l.length ? 'Diretoria: ' + l.join(', ') : 'Sem diretoria vinculada';
-  }
-  if (u.perfil === 'superintendente') {
-    const l = Object.keys(e.reg).map(k => e.reg[k]).filter(r => r.superintendente_id === u.id).map(r => r.nome);
-    return l.length ? 'Regionais: ' + l.join(', ') : 'Sem regional vinculada';
-  }
-  if (u.perfil === 'regional') {
-    const l = Object.keys(e.reg).map(k => e.reg[k]).filter(r => r.gestor_id === u.id).map(r => r.nome);
-    return l.length ? 'Regional: ' + l.join(', ') : 'Sem regional vinculada';
+  if (['diretor', 'superintendente', 'regional'].indexOf(u.perfil) >= 0) {
+    const l = salasDoUsuario_(u).map(id => e.sala[id].nome).sort();
+    if (!l.length) return 'Sem sala vinculada';
+    return (l.length === 1 ? 'Sala: ' : l.length + ' salas: ') + l.slice(0, 4).join(', ') + (l.length > 4 ? '…' : '');
   }
   const s = e.sala[u.sala_id];
   return s ? 'Sala: ' + s.nome : 'Sem sala vinculada';
@@ -1220,6 +1215,9 @@ function obterEstrutura_(d, u) {
     return {
       id: s.id, nome: s.nome, regional_id: s.regional_id, regional_nome: c.reg ? c.reg.nome : '',
       diretoria_nome: c.dir ? c.dir.nome : '', limite_pct: Number(s.limite_pct || 0), ativo: bool_(s.ativo),
+      regional_resp_id: s.regional_resp_id || '', regional_resp_nome: nome(s.regional_resp_id),
+      superintendente_id: s.superintendente_id || '', superintendente_nome: nome(s.superintendente_id),
+      diretores_ids: listaIds_(s.diretores), diretores: listaIds_(s.diretores).map(nome).filter(Boolean),
       gerentes: pessoas.filter(p => p.perfil === 'gerente').map(p => p.nome),
       assistentes: pessoas.filter(p => p.perfil === 'assistente').map(p => p.nome),
       consultores: pessoas.filter(p => p.perfil === 'consultor').map(p => p.nome),
@@ -1288,19 +1286,61 @@ function salvarSala_(d, u) {
   if (d.regional_id && !estrutura_().reg[d.regional_id]) throw falha_('Regional inválida.');
   const limite = Number(d.limite_pct || 0);
   if (isNaN(limite) || limite < 0 || limite > 100) throw falha_('O limite de exceções deve ficar entre 0 e 100%.');
-  const r = salvarRegistro_('Salas', d.id, { nome: nome, regional_id: d.regional_id || '', limite_pct: limite, ativo: boolTxt_(d.ativo) }, 'L');
+  const dados = { nome: nome, regional_id: d.regional_id || '', limite_pct: limite, ativo: boolTxt_(d.ativo) };
+  // Responsáveis da sala: só muda o que veio na requisição
+  const usuarios = ler_('Usuarios');
+  const pessoa = (id, perfil, rotulo) => {
+    if (!id) return '';
+    const x = usuarios.find(k => k.id === String(id));
+    if (!x || x.perfil !== perfil) throw falha_('Selecione um usuário com perfil ' + rotulo + '.');
+    return x.id;
+  };
+  if (d.regional_resp_id !== undefined) dados.regional_resp_id = pessoa(d.regional_resp_id, 'regional', 'Regional');
+  if (d.superintendente_id !== undefined) dados.superintendente_id = pessoa(d.superintendente_id, 'superintendente', 'Superintendente');
+  if (Array.isArray(d.diretores_ids)) {
+    dados.diretores = d.diretores_ids.map(String).filter((v, i, a) => v && a.indexOf(v) === i)
+      .map(id => pessoa(id, 'diretor', 'Diretoria')).join(',');
+  }
+  // Campos não enviados e vazios herdam o que estava na regional/diretoria (modelo antigo)
+  const atual = d.id ? buscar_('Salas', d.id) || {} : {};
+  const herdado = herdarResponsaveis_(Object.assign({}, atual, dados));
+  Object.keys(herdado).forEach(k => { if (dados[k] === undefined) dados[k] = herdado[k]; });
+  const r = salvarRegistro_('Salas', d.id, dados, 'L');
   auditar_(u, d.id ? 'editou' : 'criou', 'sala', r.id, nome + ' (limite ' + limite + '%)');
   return limpo_(r);
+}
+
+/** Responsáveis que a sala herdaria da regional e da diretoria, só para os campos que estão vazios na sala. */
+function herdarResponsaveis_(sala) {
+  const e = estrutura_();
+  const reg = e.reg[sala.regional_id];
+  const dir = reg ? e.dir[reg.diretoria_id] : null;
+  const o = {};
+  if (!sala.regional_resp_id && reg && reg.gestor_id) o.regional_resp_id = reg.gestor_id;
+  if (!sala.superintendente_id && reg && reg.superintendente_id) o.superintendente_id = reg.superintendente_id;
+  if (!sala.diretores && dir && dir.diretores) o.diretores = dir.diretores;
+  return o;
+}
+
+/** Atualização 1.8: copia para cada sala os responsáveis que antes vinham da regional e da diretoria. Roda uma vez. */
+function migrarResponsaveisSalas_() {
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('RESP_SALAS_MIGRADO') === 'true') return 0;
+  let n = 0;
+  ler_('Salas').forEach(x => {
+    const h = herdarResponsaveis_(x);
+    if (Object.keys(h).length) { atualizar_('Salas', x, h); n++; }
+  });
+  p.setProperty('RESP_SALAS_MIGRADO', 'true');
+  return n;
 }
 
 // ============================================================================
 // USUÁRIOS
 // ============================================================================
+/** Salas sob responsabilidade de um Regional, Superintendente ou Diretor. */
 function vinculosDe_(u) {
-  if (u.perfil === 'diretor') return ler_('Diretorias').filter(x => listaIds_(x.diretores).indexOf(u.id) >= 0).map(x => x.id);
-  if (u.perfil === 'superintendente') return ler_('Regionais').filter(x => x.superintendente_id === u.id).map(x => x.id);
-  if (u.perfil === 'regional') return ler_('Regionais').filter(x => x.gestor_id === u.id).map(x => x.id);
-  return [];
+  return ['diretor', 'superintendente', 'regional'].indexOf(u.perfil) >= 0 ? salasDoUsuario_(u).slice() : [];
 }
 
 function listarUsuarios_() {
@@ -1346,28 +1386,39 @@ function salvarUsuario_(d, u) {
   return { usuario: Object.assign(perfilPublico_(registro), { vinculo_ids: vinculosDe_(registro) }), senha_temporaria: senhaTemp };
 }
 
-/** Diretoria → diretorias; Superintendente e Regional → regionais. Ao mudar de perfil, os vínculos antigos são removidos. */
+/**
+ * Regional, Superintendente e Diretor → salas marcadas (ids = ids das salas; null mantém as atuais).
+ * Ao mudar de perfil, a pessoa sai das salas no papel antigo.
+ */
 function aplicarVinculos_(reg, ids) {
   const ehSup = reg.perfil === 'superintendente';
   const ehReg = reg.perfil === 'regional';
   const ehDir = reg.perfil === 'diretor';
+  ler_('Salas').forEach(x => {
+    const alt = {};
+    const temReg = x.regional_resp_id === reg.id, temSup = x.superintendente_id === reg.id;
+    const diretores = listaIds_(x.diretores), temDir = diretores.indexOf(reg.id) >= 0;
+    const marcada = ids ? ids.indexOf(x.id) >= 0 : null;
+    const deveReg = ehReg && (marcada === null ? temReg : marcada);
+    const deveSup = ehSup && (marcada === null ? temSup : marcada);
+    const deveDir = ehDir && (marcada === null ? temDir : marcada);
+    if (deveReg !== temReg) alt.regional_resp_id = deveReg ? reg.id : '';
+    if (deveSup !== temSup) alt.superintendente_id = deveSup ? reg.id : '';
+    if (deveDir !== temDir) alt.diretores = (deveDir ? diretores.concat(reg.id) : diretores.filter(i => i !== reg.id)).join(',');
+    if (Object.keys(alt).length) atualizar_('Salas', x, alt);
+  });
+  // vínculos do modelo antigo (regional e diretoria) não valem mais para esta pessoa
   ler_('Diretorias').forEach(x => {
     const alt = {};
     const diretores = listaIds_(x.diretores);
     const tem = diretores.indexOf(reg.id) >= 0;
-    const deveDir = ehDir && (ids ? ids.indexOf(x.id) >= 0 : tem);
-    if (deveDir && !tem) alt.diretores = diretores.concat(reg.id).join(',');
-    if (!deveDir && tem) alt.diretores = diretores.filter(i => i !== reg.id).join(',');
+    if (tem && !ehDir) alt.diretores = diretores.filter(i => i !== reg.id).join(',');
     if (Object.keys(alt).length) atualizar_('Diretorias', x, alt);
   });
   ler_('Regionais').forEach(x => {
     const alt = {};
-    const deve = ehReg && (ids ? ids.indexOf(x.id) >= 0 : x.gestor_id === reg.id);
-    if (deve && x.gestor_id !== reg.id) alt.gestor_id = reg.id;
-    if (!deve && x.gestor_id === reg.id) alt.gestor_id = '';
-    const deveSup = ehSup && (ids ? ids.indexOf(x.id) >= 0 : x.superintendente_id === reg.id);
-    if (deveSup && x.superintendente_id !== reg.id) alt.superintendente_id = reg.id;
-    if (!deveSup && x.superintendente_id === reg.id) alt.superintendente_id = '';
+    if (x.gestor_id === reg.id && !ehReg) alt.gestor_id = '';
+    if (x.superintendente_id === reg.id && !ehSup) alt.superintendente_id = '';
     if (Object.keys(alt).length) atualizar_('Regionais', x, alt);
   });
 }
@@ -1982,6 +2033,8 @@ function setup() {
   }
 
   const novasSalas = importarSalasPadrao_();
+  const migradas = migrarResponsaveisSalas_();
+  if (migradas) Logger.log('Responsáveis copiados da regional/diretoria para ' + migradas + ' sala(s).');
 
   let mensagem = novasSalas ? novasSalas + ' sala(s) de vendas cadastrada(s). ' : '';
   if (!ler_('Usuarios').some(u => u.perfil === 'master')) {

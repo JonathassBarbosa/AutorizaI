@@ -8,10 +8,10 @@ let filtro = { perfil: '', busca: '' };
 const PERFIS_DE_SALA = ['gerente', 'assistente', 'consultor'];
 
 /** Diretoria responde por diretorias; Superintendente e Regional, por regionais. */
-function vinculoDoPerfil(p) {
-  if (p === 'diretor') return { titulo: 'Diretorias', singular: 'diretoria', lista: est.diretorias.map(x => ({ id: x.id, rotulo: x.nome })) };
-  return { titulo: 'Regionais', singular: 'regional',
-    lista: est.regionais.map(x => ({ id: x.id, rotulo: x.diretoria_nome ? `${x.nome} — ${x.diretoria_nome}` : x.nome })) };
+/** Regional, Superintendente e Diretoria respondem pelas salas que o master marcar. */
+function vinculoDoPerfil() {
+  return { titulo: 'Salas', singular: 'sala',
+    lista: est.salas.map(x => ({ id: x.id, rotulo: x.regional_nome ? `${x.nome} — ${x.regional_nome}` : x.nome })) };
 }
 
 function mostrarSenha(nome, email, senha) {
@@ -121,7 +121,7 @@ export default {
           const v = vinculoDoPerfil(p);
           const marcados = u.perfil === p ? (u.vinculo_ids || []) : [];
           h = html`<div class="campo"><span class="rotulo">${v.titulo} sob responsabilidade</span>
-            ${v.lista.length ? html`<div class="grade grade-2" style="gap:8px">${v.lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}" ${marcados.includes(x.id) ? 'checked' : ''}> ${x.rotulo}</label>`)}</div>`
+            ${v.lista.length ? html`<div class="grade grade-2 lista-salas" style="gap:8px">${v.lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}" ${marcados.includes(x.id) ? 'checked' : ''}> ${x.rotulo}</label>`)}</div>`
               : html`<small>Nenhuma ${v.singular} cadastrada. Você pode vincular depois em Estrutura.</small>`}</div>`;
         } else {
           h = html`<div class="aviso aviso-azul" style="margin-bottom:16px">${icone('escudo')}<div>Master tem acesso total ao sistema.</div></div>`;
@@ -178,7 +178,7 @@ export default {
         } else {
           const v = vinculoDoPerfil(p);
           caixa.innerHTML = html`<div class="campo"><span class="rotulo">${v.titulo} sob responsabilidade de ${u.nome.split(' ')[0]}</span>
-            ${v.lista.length ? html`<div class="grade grade-2" style="gap:8px">${v.lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}"> ${x.rotulo}</label>`)}</div>`
+            ${v.lista.length ? html`<div class="grade grade-2 lista-salas" style="gap:8px">${v.lista.map(x => html`<label class="check"><input type="checkbox" name="vinculo" value="${x.id}"> ${x.rotulo}</label>`)}</div>`
               : html`<div class="aviso aviso-ambar">${icone('alerta')}<div>Nenhuma ${v.singular} cadastrada ainda. Pode aprovar agora e vincular depois em <a href="#/estrutura">Estrutura</a>.</div></div>`}
             ${v.lista.length ? html`<small>Pode deixar sem marcar e vincular depois em Estrutura.</small>` : ''}</div>`.toString();
         }

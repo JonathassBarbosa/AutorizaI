@@ -68,7 +68,7 @@ const est = ok('estrutura.obter', {}, tm);
 assert.strictEqual(est.salas.filter(x => x.regional_id === rgl.id).length, 2);
 assert.strictEqual(est.regionais[0].gestor_nome, 'Rafael Regional');
 assert.strictEqual(est.regionais[0].superintendente_nome, 'Sofia Superintendente');
-assert.ok(ok('usuarios.listar', {}, tm).find(x => x.id === sup.id).vinculo.startsWith('Regionais: Regional Pernambuco'));
+assert.strictEqual(ok('usuarios.listar', {}, tm).find(x => x.id === sup.id).vinculo, '2 salas: Muro Alto, Porto de Galinhas - Dia', 'a sala herda o superintendente da regional ao ser vinculada');
 passo('estrutura: diretoria → superintendente → regional → salas com gerente, consultores e assistente');
 
 const tc = entrar(con.email, con.senha, 'Consultor1');
@@ -215,17 +215,30 @@ ok('usuarios.recusarCadastro', { id: ok('usuarios.listar', {}, tm).find(x => x.e
 falha('auth.login', { email: 'rui@gav.dev', senha: 'Rui12345' }, null, 'CADASTRO_RECUSADO');
 passo('autocadastro: escolhe função e sala, entra só depois da aprovação do master (e-mails enviados)');
 
-// --- diretoria: o master aponta as diretorias na aprovação
+// --- diretoria: o master marca as salas na aprovação ou direto na sala
 ok('cadastro.solicitar', { nome: 'Diana Diretora', email: 'diana@gav.dev', perfil: 'diretor', telefone: '(11) 91234-5678', senha: 'Diana1234' });
 const diana = ok('usuarios.listar', {}, tm).find(x => x.email === 'diana@gav.dev');
-ok('usuarios.aprovarCadastro', { id: diana.id }, tm); // pode aprovar sem vínculo e ligar depois
-ok('estrutura.salvarDiretoria', { id: dir.id, nome: 'Diretoria Nordeste', ativo: true, diretores_ids: [diana.id] }, tm);
-assert.deepStrictEqual(ok('estrutura.obter', {}, tm).diretorias.find(x => x.id === dir.id).diretores_ids, [diana.id]);
-falha('estrutura.salvarDiretoria', { id: dir.id, nome: 'Diretoria Nordeste', ativo: true, diretores_ids: [reg.id] }, tm);
+ok('usuarios.aprovarCadastro', { id: diana.id, vinculo_ids: [sala.id] }, tm);
 const tdd = ok('auth.login', { email: 'diana@gav.dev', senha: 'Diana1234' }).token;
+assert.strictEqual(ok('dashboard.obter', {}, tdd).salas.length, 1);
+assert.strictEqual(ok('auth.eu', {}, tdd).vinculo, 'Sala: Porto de Galinhas - Dia');
+// na tela da sala: escolhe os diretores, o regional e o superintendente
+ok('estrutura.salvarSala', { id: sala2.id, nome: 'Muro Alto', regional_id: rgl.id, limite_pct: 0, ativo: true, diretores_ids: [diana.id] }, tm);
 assert.strictEqual(ok('dashboard.obter', {}, tdd).salas.length, 2);
-assert.match(ok('auth.eu', {}, tdd).vinculo, /Diretoria Nordeste/);
-passo('diretoria: só enxerga as diretorias que o master vinculou');
+const estSala = ok('estrutura.obter', {}, tm).salas.find(x => x.id === sala2.id);
+assert.deepStrictEqual(estSala.diretores, ['Diana Diretora']);
+assert.strictEqual(estSala.superintendente_nome, 'Sofia Superintendente');
+falha('estrutura.salvarSala', { id: sala2.id, nome: 'Muro Alto', regional_id: rgl.id, superintendente_id: reg.id }, tm);
+ok('estrutura.salvarSala', { id: sala2.id, nome: 'Muro Alto', regional_id: rgl.id, limite_pct: 0, ativo: true, superintendente_id: '' }, tm);
+assert.strictEqual(ok('estrutura.obter', {}, tm).salas.find(x => x.id === sala2.id).superintendente_id, '', 'o master pode tirar o superintendente da sala');
+ok('estrutura.salvarSala', { id: sala2.id, nome: 'Muro Alto', regional_id: rgl.id, limite_pct: 0, ativo: true, superintendente_id: sup.id }, tm);
+// no cadastro da pessoa: as salas marcadas substituem as anteriores
+const dianaEd = ok('usuarios.listar', {}, tm).find(x => x.id === diana.id);
+assert.deepStrictEqual(dianaEd.vinculo_ids.sort(), [sala.id, sala2.id].sort());
+ok('usuarios.salvar', Object.assign({}, dianaEd, { vinculo_ids: [sala2.id] }), tm);
+assert.strictEqual(ok('auth.eu', {}, tdd).vinculo, 'Sala: Muro Alto');
+ok('usuarios.salvar', Object.assign({}, dianaEd, { vinculo_ids: [sala.id, sala2.id] }), tm);
+passo('responsáveis por sala: o master escolhe Regional, Superintendente e Diretoria na sala ou marca as salas no cadastro');
 
 // --- assistente recebe retorno também das negativas
 const antes = ok('notificacoes.listar', {}, ta).nao_lidas;
