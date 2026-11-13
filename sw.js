@@ -5,7 +5,7 @@ try {
   // Sem internet na instalação: o push volta a funcionar na próxima atualização.
 }
 
-const CACHE = 'gav-autorizacoes-v10';
+const CACHE = 'gav-autorizacoes-v11';
 const ARQUIVOS = [
   './', 'index.html', 'config.js', 'manifest.webmanifest', 'css/app.css',
   'js/core.js', 'js/app.js', 'js/marcas.js', 'js/marcas-dados.js', 'js/whatsapp.js', 'js/qrcode.js', 'js/push.js', 'js/monitor-client.js', 'js/regras-pagamento.js', 'js/negociacao.js',
